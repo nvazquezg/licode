@@ -21,7 +21,10 @@ if (config.erizoController.sslCaCerts) {
         options.ca.push(fs.readFileSync(config.erizoController.sslCaCerts[ca]).toString());
     }
 }
+
+//TODO: Vbles a mongo?
 var roomsRecording = {};
+var recordings = {};
 
 var app = express();
 
@@ -67,27 +70,93 @@ var onData = function(event) {
     console.log('DATA', event);
 };
 
-var initRecording = function(room, stream) {
+var initRecording = function(room, stream, callback) {
     // console.log('INITRECORDING-ROOM', room);
     // console.log('INITRECORDING-STREAM', stream);
+    if(recordings[stream.getID()]) {
+        console.log('Already recording stream', stream.getID(), recordings[stream.getID()]);
+        callback('Already recording stream');
+        //TODO
+    }
+
     room.startRecording(stream, function(id) {
         console.log('INIT STREAM: ', stream.getID(), 'RECORDING:', id);
-    });
+        recordings[stream.getID()] = id;
+    }, callback);
 };
 
-var startRecording = function(stream) {
+var startRecording = function(stream, callback) {
     //console.log('STARTRECORDING', stream);
+    if(recordings[stream.getID()]) {
+        console.log('Already recording stream', stream.getID(), recordings[stream.getID()]);
+        callback('Already recording stream');
+        //TODO
+    }
+
     stream.room.startRecording(stream, function(id) {
         console.log('START STREAM: ', stream.getID(), 'RECORDING:', id);
+        recordings[stream.getID()] = id;
+    }, callback);
+};
+
+var stopRecording = function(room, stream) {
+    //console.log('STOPRECORDING', stream);
+    //TODO: check if not recording?
+    room.stopRecording(recordings[stream.getID()], function(id) {
+        console.log('STOPPED STREAM: ', stream.getID(), 'RECORDING:', id);
+        delete recordings[stream.getID()];
+    }, function (err) {
+        console.log(err);
     });
 };
 
-var stopRecording = function(stream) {
-    //console.log('STOPRECORDING', stream);
-    stream.room.stopRecording(stream, function(id) {
-        console.log('STOP STREAM: ', stream.getID(), 'RECORDING:', id);
+app.post('/record/stop', function(req, res) {
+    console.log('Stopping recording: ', req.body);
+
+    if(!req.body.idSala){
+        console.log('Missing required parameter idSala');
+        res.status(422).send('Missing required parameter');
+        return;
+    }
+
+    let room = roomsRecording[req.body.idSala];
+
+    if(typeof roomsRecording[req.body.idSala] === 'undefined') {
+        console.log('Sala not recording');
+        res.status(409).send({result: 'Not recording'});
+        return;
+    } else if (roomsRecording[req.body.idSala].roomID === 'unloading') {
+        // roomsRecording[req.body.idSala] = {roomID: 'stuck'};
+        console.log('Sala already stopping');
+        res.status(409).send({result: 'Already stopping', data: roomsRecording[req.body.idSala].roomID});
+        return;
+    } else if (roomsRecording[req.body.idSala].roomID === 'loading') {
+        console.log('Sala just starting recording');
+        res.status(409).send({result: 'Just started recording', data: roomsRecording[req.body.idSala].roomID});
+        return;
+    }
+    else if (room.state !== 2) {
+        console.log('Not connected to Room');
+        res.status(409).send({result: 'Not connected to Room', data: roomsRecording[req.body.idSala].roomID});
+        return;
+    }
+    else { //Evitar condiciones de carrera
+        //roomsRecording[req.body.idSala] = {roomID: 'unloading'};
+    }
+
+    room.remoteStreams.forEach(function(value, index) {
+        console.log('STREAM', index, value);
+        stopRecording(room, value);
     });
-};
+
+    //TODO:
+    setTimeout(function() {
+        console.log('DISCONNECT', room.roomID);
+        room.disconnect();
+        console.log('DELETE FROM GLOBAL LIST');
+        delete roomsRecording[req.body.idSala]
+    }, 10000);
+});
 
 app.post('/record/start', function(req, res) {
     console.log('Starting recording: ',req.body);
@@ -106,7 +175,9 @@ app.post('/record/start', function(req, res) {
     }
 
     var createToken = function (roomId, idSala) {
+        console.log('Creating token');
         N.API.createToken(roomId, 'recorder', 'presenter', function(token) {
+            console.log('Token ready', token);
             connect(token, idSala);
             res.status(200).send({result: 'OK', token: token, idSala: idSala});
         }, function(error) {
