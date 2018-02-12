@@ -21,7 +21,7 @@ if (config.erizoController.sslCaCerts) {
         options.ca.push(fs.readFileSync(config.erizoController.sslCaCerts[ca]).toString());
     }
 }
-var roomsRecording = [];
+var roomsRecording = {};
 
 var app = express();
 
@@ -71,21 +71,21 @@ var initRecording = function(room, stream) {
     // console.log('INITRECORDING-ROOM', room);
     // console.log('INITRECORDING-STREAM', stream);
     room.startRecording(stream, function(id) {
-        console.log('STREAM: ', stream.getID(), 'RECORDING:', id);
+        console.log('INIT STREAM: ', stream.getID(), 'RECORDING:', id);
     });
 };
 
 var startRecording = function(stream) {
     //console.log('STARTRECORDING', stream);
     stream.room.startRecording(stream, function(id) {
-        console.log('STREAM: ', stream.getID(), 'RECORDING:', id);
+        console.log('START STREAM: ', stream.getID(), 'RECORDING:', id);
     });
 };
 
 var stopRecording = function(stream) {
-    console.log('STOPRECORDING', stream);
+    //console.log('STOPRECORDING', stream);
     stream.room.stopRecording(stream, function(id) {
-        console.log('STREAM: ', stream.getID(), 'RECORDING:', id);
+        console.log('STOP STREAM: ', stream.getID(), 'RECORDING:', id);
     });
 };
 
@@ -97,27 +97,28 @@ app.post('/record/start', function(req, res) {
         res.status(422).send('Missing required parameter');
         return;
     }
+    if(roomsRecording[req.body.idSala]) {
+        console.log('Sala already recording');
+        res.status(409).send({result: 'Already recording', data: roomsRecording[req.body.idSala].roomID});
+        return;
+    } else { //Evitar condiciones de carrera
+        roomsRecording[req.body.idSala] = {roomID: 'loading'};
+    }
 
     var createToken = function (roomId, idSala) {
-        console.info('Create token');
         N.API.createToken(roomId, 'recorder', 'presenter', function(token) {
-            console.log('Token created', token);
             connect(token, idSala);
-            //res.send(token);
+            res.status(200).send({result: 'OK', token: token, idSala: idSala});
         }, function(error) {
             console.log('Error creating token', error);
-            res.status(401).send('No Erizo Controller found');
+            res.status(401).send({result: 'Error creating token', error: error});
         });
     };
 
     var getRoom = function (name, callback) {
-        console.info('Get room');
         N.API.getRooms(function (roomlist){
-            console.info('Rooms');
             const rooms = JSON.parse(roomlist);
-            console.log(rooms);
             for (var room of rooms) {
-                console.log(room.name, name);
                 if (room.name === name){
 
                     callback(room._id, name);
@@ -134,10 +135,9 @@ app.post('/record/start', function(req, res) {
 });
 
 app.get('/record/list', function(req, res) {
-    let result = 'salas: \n';
-    roomsRecording.forEach(function(room, index) {
-        result += index + ' -> ' + JSON.stringify(room.roomID) + '\n';
-        result += JSON.stringify(room.remoteStreams) + '\n'
+    let result = {};
+    Object.keys(roomsRecording).forEach(function(key) {
+        result[key] = roomsRecording[key].roomID;
     });
     res.status(200).send(result);
 });
