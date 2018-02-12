@@ -21,7 +21,7 @@ if (config.erizoController.sslCaCerts) {
         options.ca.push(fs.readFileSync(config.erizoController.sslCaCerts[ca]).toString());
     }
 }
-var room = '';
+var roomsRecording = [];
 
 var app = express();
 
@@ -49,50 +49,14 @@ app.use(function(req, res, next) {
 
 N.API.init(config.nuve.superserviceID, config.nuve.superserviceKey, 'http://localhost:3000/');
 
-var connect = function(token) {
-    room = Erizo.Room(newIo, undefined, {token:token});
-
-    room.addEventListener("room-connected", onConnected);
-    room.addEventListener('stream-added', onAddStream);
-    room.addEventListener('stream-removed', onRemoveStream);
-    room.addEventListener('stream-subscribed', onStreamSubscribed);
-    room.connect();
-    //console.log('ROOM', room);
-};
-
-var onConnected = function(event) {
-    console.log('CONNECTED', event);
-    var streams = room.getStreamsByAttribute();
-    console.log('STREAMS1', streams);
-    for(let s of streams){
-        console.log('STREAM1', s.getID());
-        if(s.recording !== 'undefined') {
-            startRecording(s);
-        }
-    }
-    console.log('ROOM', room);
-    console.log('ROOM', room.remoteStreams);
-};
-
 var onAddStream = function(event) {
-    console.log('ADDSTREAM', event);
-    console.log('ROOM', room);
-    console.log('ROOM2', event.stream.room);
-    var streams = room.getStreamsByAttribute();
-    console.log('STREAMS', streams);
-    for(let s of streams){
-        console.log('STREAM', s.getID())
-        if(s.recording !== 'undefined') {
-            startRecording(s);
-        }
-    }
-    //event.stream.addEventListener('stream-data', onData);
-    //room.subscribe(event.stream);
-    //startRecording(event.stream);
+    //console.log('ADDSTREAM', event);
+    startRecording(event.stream);
 };
 
 var onRemoveStream = function(event) {
     console.log('REMOVESTREAM', event);
+    // stopRecording(event.stream);
 };
 
 var onStreamSubscribed = function(event) {
@@ -103,14 +67,29 @@ var onData = function(event) {
     console.log('DATA', event);
 };
 
-var startRecording = function(stream) {
-    console.log('STARTRECORDING', stream);
+var initRecording = function(room, stream) {
+    // console.log('INITRECORDING-ROOM', room);
+    // console.log('INITRECORDING-STREAM', stream);
     room.startRecording(stream, function(id) {
-        console.log('STREAM', stream, 'ID', id);
+        console.log('STREAM: ', stream.getID(), 'RECORDING:', id);
     });
 };
 
-app.post('/record/', function(req, res) {
+var startRecording = function(stream) {
+    //console.log('STARTRECORDING', stream);
+    stream.room.startRecording(stream, function(id) {
+        console.log('STREAM: ', stream.getID(), 'RECORDING:', id);
+    });
+};
+
+var stopRecording = function(stream) {
+    console.log('STOPRECORDING', stream);
+    stream.room.stopRecording(stream, function(id) {
+        console.log('STREAM: ', stream.getID(), 'RECORDING:', id);
+    });
+};
+
+app.post('/record/start', function(req, res) {
     console.log('Starting recording: ',req.body);
 
     if(!req.body.idSala){
@@ -119,11 +98,11 @@ app.post('/record/', function(req, res) {
         return;
     }
 
-    var createToken = function (roomId) {
-
+    var createToken = function (roomId, idSala) {
+        console.info('Create token');
         N.API.createToken(roomId, 'recorder', 'presenter', function(token) {
             console.log('Token created', token);
-            connect(token);
+            connect(token, idSala);
             //res.send(token);
         }, function(error) {
             console.log('Error creating token', error);
@@ -132,17 +111,16 @@ app.post('/record/', function(req, res) {
     };
 
     var getRoom = function (name, callback) {
-
+        console.info('Get room');
         N.API.getRooms(function (roomlist){
-            var theRoom = '';
-            var rooms = JSON.parse(roomlist);
+            console.info('Rooms');
+            const rooms = JSON.parse(roomlist);
             console.log(rooms);
             for (var room of rooms) {
                 console.log(room.name, name);
                 if (room.name === name){
 
-                    theRoom = room._id;
-                    callback(theRoom);
+                    callback(room._id, name);
                     return;
                 }
             }
@@ -155,6 +133,14 @@ app.post('/record/', function(req, res) {
     getRoom(+req.body.idSala, createToken);
 });
 
+app.get('/record/list', function(req, res) {
+    let result = 'salas: \n';
+    roomsRecording.forEach(function(room, index) {
+        result += index + ' -> ' + JSON.stringify(room.roomID) + '\n';
+        result += JSON.stringify(room.remoteStreams) + '\n'
+    });
+    res.status(200).send(result);
+});
 
 app.use(function(req, res, next) {
     res.header('Access-Control-Allow-Origin', '*');
@@ -166,6 +152,30 @@ app.use(function(req, res, next) {
         next();
     }
 });
+
+var connect = function(token, idSala) {
+    let room = Erizo.Room(newIo, undefined, {token:token});
+
+    //room-connected no trae room definido, así que se implementa aquí la función para tener room en el ámbito
+    room.addEventListener("room-connected", function(event) {
+        //console.log('CONNECTED', event);
+        console.log('CONNECTED TO ROOM: ', room.roomID);
+
+        for(let s of event.streams) {
+            //console.log('STREAM1', s.getID());
+            initRecording(room, s);
+        }
+    });
+    room.addEventListener('stream-added', onAddStream);
+    room.addEventListener('stream-removed', onRemoveStream);
+    room.addEventListener('stream-subscribed', onStreamSubscribed);
+    room.connect();
+
+    //Guardar la sala en el ámbito global para poder monitorizarlas
+    //roomsRecording[room.roomID] = room;
+    roomsRecording[idSala] = room;
+    //console.log('ROOM', room);
+};
 
 app.listen(3002);
 
