@@ -99,14 +99,16 @@ var startRecording = function(stream, callback) {
     }, callback);
 };
 
-var stopRecording = function(room, stream) {
+var stopRecording = function(room, stream, callback, callbackError) {
     //console.log('STOPRECORDING', stream);
     //TODO: check if not recording?
     room.stopRecording(recordings[stream.getID()], function(id) {
         console.log('STOPPED STREAM: ', stream.getID(), 'RECORDING:', id);
         delete recordings[stream.getID()];
+        callback(true);
     }, function (err) {
         console.log(err);
+        callbackError(false);
     });
 };
 
@@ -144,18 +146,36 @@ app.post('/record/stop', function(req, res) {
         //roomsRecording[req.body.idSala] = {roomID: 'unloading'};
     }
 
-    room.remoteStreams.forEach(function(value, index) {
-        console.log('STREAM', index, value);
-        stopRecording(room, value);
-    });
+    var disconnect = function(){
+        setTimeout(function () {
+            console.log('DISCONNECT', room.roomID);
+            room.disconnect();
+            console.log('DELETE FROM GLOBAL LIST');
+            delete roomsRecording[req.body.idSala];
+            res.status(200).send({result: 'OK', roomID: room.roomID, idSala: req.body.idSala});
 
-    //TODO:
-    setTimeout(function() {
-        console.log('DISCONNECT', room.roomID);
-        room.disconnect();
-        console.log('DELETE FROM GLOBAL LIST');
-        delete roomsRecording[req.body.idSala]
-    }, 10000);
+        }, 1000);
+    };
+
+    var numStopped = 0;
+    room.remoteStreams.forEach(function(value, index) {
+        //console.log('STREAM', index, value);
+        stopRecording(room, value, function (result) {
+            if (result === true) {
+                ++numStopped;
+            }
+            if (numStopped === room.remoteStreams.keys().length) {
+                disconnect();
+            }
+            else {
+                console.log('DISCONNECTED', numStopped, room.remoteStreams.keys().length);
+            }
+
+        }, function (err) {
+            console.log('ERROR STOPPING', value, result);
+            res.status(500).send({result: 'Error stopping recordings', stream: value.getID()});
+        });
+    });
 });
 
 app.post('/record/start', function(req, res) {
