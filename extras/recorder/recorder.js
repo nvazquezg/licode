@@ -202,6 +202,7 @@ app.post('/record/start', function(req, res) {
             res.status(200).send({result: 'OK', token: token, idSala: idSala});
         }, function(error) {
             console.log('Error creating token', error);
+            delete roomsRecording[req.body.idSala];
             res.status(401).send({result: 'Error creating token', error: error});
         });
     };
@@ -219,6 +220,10 @@ app.post('/record/start', function(req, res) {
 
             console.log('Room not found', name);
             res.status(404).send('Room not found');
+        }, function(error){
+            console.log('GET ROOM ERROR: ', error);
+            delete roomsRecording[req.body.idSala];
+            res.status(401).send({result: 'Error getting room', error: error});
         });
     };
 
