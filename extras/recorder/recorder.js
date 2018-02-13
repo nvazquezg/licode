@@ -170,6 +170,9 @@ app.post('/record/stop', function(req, res) {
     };
 
     var numStopped = 0;
+    if (numStopped === room.remoteStreams.keys().length) {
+        disconnect();
+    }
     room.remoteStreams.forEach(function(value, index) {
         //console.log('STREAM', index, value);
         stopRecording(room, value, function (result) {
