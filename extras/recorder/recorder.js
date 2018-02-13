@@ -248,8 +248,19 @@ app.post('/record/start', function(req, res) {
 
 app.get('/record/list', function(req, res) {
     let result = {};
+    result.roomsRecording = {};
     Object.keys(roomsRecording).forEach(function(key) {
-        result[key] = roomsRecording[key].roomID;
+        let streams = [];
+        roomsRecording[key].remoteStreams.forEach(function(value, index) {
+            streams.push({
+                id: value.getID(),
+                recording: recordings[value.getID()]
+            });
+        });
+        result.roomsRecording[key] = {
+            roomID: roomsRecording[key].roomID,
+            streams: streams
+        };
     });
     res.status(200).send(result);
 });
