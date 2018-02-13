@@ -70,33 +70,45 @@ var onData = function(event) {
     console.log('DATA', event);
 };
 
-var initRecording = function(room, stream, callback) {
+var initRecording = function(room, stream, callback, callbackError) {
     // console.log('INITRECORDING-ROOM', room);
     // console.log('INITRECORDING-STREAM', stream);
     if(recordings[stream.getID()]) {
         console.log('Already recording stream', stream.getID(), recordings[stream.getID()]);
-        callback('Already recording stream');
-        //TODO
+        callbackError('Already recording stream');
     }
 
-    room.startRecording(stream, function(id) {
-        console.log('INIT STREAM: ', stream.getID(), 'RECORDING:', id);
-        recordings[stream.getID()] = id;
-    }, callback);
+    room.startRecording(stream, function(id, error) {
+        if(id !== undefined) {
+            console.log('INIT STREAM: ', stream.getID(), 'RECORDING:', id);
+            recordings[stream.getID()] = id;
+            callback(id);
+        }
+        else {
+            console.log('INIT STREAM ERROR: ', stream.getID(), 'ERROR:', error);
+            callbackError(error);
+        }
+    });
 };
 
-var startRecording = function(stream, callback) {
+var startRecording = function(stream, callback, callbackError) {
     //console.log('STARTRECORDING', stream);
     if(recordings[stream.getID()]) {
         console.log('Already recording stream', stream.getID(), recordings[stream.getID()]);
-        callback('Already recording stream');
-        //TODO
+        callbackError('Already recording stream');
     }
 
-    stream.room.startRecording(stream, function(id) {
-        console.log('START STREAM: ', stream.getID(), 'RECORDING:', id);
-        recordings[stream.getID()] = id;
-    }, callback);
+    stream.room.startRecording(stream, function(id, error) {
+        if(id !== undefined) {
+            console.log('START STREAM: ', stream.getID(), 'RECORDING:', id);
+            recordings[stream.getID()] = id;
+            callback(id);
+        }
+        else {
+            console.log('START STREAM ERROR: ', stream.getID(), 'ERROR:', error);
+            callbackError(error);
+        }
+    });
 };
 
 var stopRecording = function(room, stream, callback, callbackError) {
@@ -198,8 +210,12 @@ app.post('/record/start', function(req, res) {
         console.log('Creating token');
         N.API.createToken(roomId, 'recorder', 'presenter', function(token) {
             console.log('Token ready', token);
-            connect(token, idSala);
-            res.status(200).send({result: 'OK', token: token, idSala: idSala});
+            connect(token, idSala, function(value) {
+                res.status(200).send({result: 'OK', token: token, idSala: idSala, streams: value});
+            }, function (error) {
+                res.status(500).send({result: 'Error initiating recording', error: error});
+            });
+
         }, function(error) {
             console.log('Error creating token', error);
             delete roomsRecording[req.body.idSala];
@@ -249,7 +265,7 @@ app.use(function(req, res, next) {
     }
 });
 
-var connect = function(token, idSala) {
+var connect = function(token, idSala, callback, callbackError) {
     let room = Erizo.Room(newIo, undefined, {token:token});
 
     //room-connected no trae room definido, así que se implementa aquí la función para tener room en el ámbito
@@ -257,9 +273,18 @@ var connect = function(token, idSala) {
         //console.log('CONNECTED', event);
         console.log('CONNECTED TO ROOM: ', room.roomID);
 
+        let initiated = 0;
+        if(event.streams.length === 0) {
+            callback(initiated);
+        }
         for(let s of event.streams) {
             //console.log('STREAM1', s.getID());
-            initRecording(room, s);
+            initRecording(room, s, function(value) {
+                console.log('RECORDING INITIATED: ', initiated , value);
+                if(++initiated === event.streams.length){
+                    callback(initiated);
+                }
+            }, callbackError);
         }
     });
     room.addEventListener('stream-added', onAddStream);
