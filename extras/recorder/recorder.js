@@ -54,7 +54,11 @@ N.API.init(config.nuve.superserviceID, config.nuve.superserviceKey, 'http://loca
 
 var onAddStream = function(event) {
     //console.log('ADDSTREAM', event);
-    startRecording(event.stream);
+    startRecording(event.stream, function(res){
+        console.log('ADD STREAM: ', event.stream.getID(), 'RECORDING:', res);
+    }, function (error) {
+        console.log('ADD STREAM ERROR: ', event.stream.getID(), 'ERROR:', error);
+    });
 };
 
 var onRemoveStream = function(event) {
