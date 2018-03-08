@@ -1,0 +1,17 @@
+image: ubuntu:14.04
+
+stages:
+    - build
+
+before_script:
+    - mkdir -p /opt/licode
+
+build_job:
+    stage: build
+    script:
+        - ./scripts/installUbuntuDeps.sh --cleanup
+        - ./scripts/installErizo.sh
+        - ./scripts/installNuve.sh
+    artifacts:
+        paths:
+            - .
