@@ -4,7 +4,7 @@ stages:
     - build
 
 before_script:
-    - mkdir -p /opt/licode
+    - apt-get update && apt-get install -y git wget curl
 
 build_job:
     stage: build
