@@ -10,7 +10,7 @@ build_job:
     stage: build
     script:
         - ./scripts/installUbuntuDeps.sh --cleanup
-        - ./scripts/installErizo.sh
+        - ./scripts/installErizo.sh -eacdfs
         - ./scripts/installNuve.sh
     artifacts:
         paths:
