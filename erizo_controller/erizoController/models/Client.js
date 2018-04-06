@@ -23,12 +23,13 @@ function listenToSocketEvents(client) {
 }
 
 class Client extends events.EventEmitter {
-  constructor(channel, token, room) {
+  constructor(channel, token, options, room) {
     super();
     this.channel = channel;
     this.room = room;
     this.token = token;
     this.id = uuidv4();
+    this.options = options;
     listenToSocketEvents(this);
     this.user = {name: token.userName, role: token.role, permissions: {}};
     const permissions = global.config.erizoController.roles[token.role] || [];
@@ -163,6 +164,7 @@ class Client extends events.EventEmitter {
                                     audio: options.audio,
                                     video: options.video,
                                     data: options.data,
+                                    label: options.label,
                                     attributes: options.attributes});
                 st.status = PUBLISHER_READY;
                 this.streams.push(id);
@@ -176,8 +178,9 @@ class Client extends events.EventEmitter {
     } else if (options.state === 'erizo') {
         let st;
         options.mediaConfiguration = this.token.mediaConfiguration;
+        options.singlePC = this.options.singlePC || false;
         log.info('message: addPublisher requested, ' +
-                 'streamId: ' + id + ', clientId: ' + this.id + ', ' +
+                 'streamId: ' + id + ', clientId: ' + this.id +
                  logger.objectToLog(options) + ', ' +
                  logger.objectToLog(options.attributes));
         this.room.controller.addPublisher(this.id, id, options, (signMess) => {
@@ -188,12 +191,14 @@ class Client extends events.EventEmitter {
                                     audio: options.audio,
                                     video: options.video,
                                     data: options.data,
+                                    label: options.label,
                                     screen: options.screen,
                                     attributes: options.attributes});
                 this.streams.push(id);
                 this.room.streams.set(id, st);
                 st.status = PUBLISHER_INITAL;
                 log.info('message: addPublisher, ' +
+                         'label: ' + options.label + ', ' +
                          'state: PUBLISHER_INITIAL, ' +
                          'clientId: ' + this.id + ', ' +
                          'streamId: ' + id);
@@ -249,6 +254,7 @@ class Client extends events.EventEmitter {
                             audio: options.audio,
                             video: options.video,
                             data: options.data,
+                            label: options.label,
                             screen: options.screen,
                             attributes: options.attributes});
         this.streams.push(id);
@@ -260,7 +266,6 @@ class Client extends events.EventEmitter {
   }
 
   onSubscribe(options, sdp, callback) {
-    log.info('Subscribing', options, this.user);
     if (this.user === undefined || !this.user.permissions[Permission.SUBSCRIBE]) {
         callback(null, 'Unauthorized');
         return;
@@ -293,6 +298,7 @@ class Client extends events.EventEmitter {
                      'streamId: ' + options.streamId + ', ' +
                      'clientId: ' + this.id);
             options.mediaConfiguration = this.token.mediaConfiguration;
+            options.singlePC = this.options.singlePC || false;
             this.room.controller.addSubscriber(this.id, options.streamId, options, (signMess) => {
                 if (signMess.type === 'initializing') {
                     log.info('message: addSubscriber, ' +

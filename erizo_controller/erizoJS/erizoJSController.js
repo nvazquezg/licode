@@ -20,7 +20,6 @@ exports.ErizoJSController = function (threadPool, ioThreadPool) {
         statsSubscriptions = {},
         onAdaptSchemeNotify,
         onPeriodicStats,
-        addListenerToConnection,
         onConnectionStatusEvent,
         closeNode,
         getOrCreateClient,
@@ -30,11 +29,11 @@ exports.ErizoJSController = function (threadPool, ioThreadPool) {
     that.publishers = publishers;
     that.ioThreadPool = io;
 
-    getOrCreateClient = (clientId) => {
+    getOrCreateClient = (clientId, singlePC = false) => {
       log.debug(`getOrCreateClient with id ${clientId}`);
       let client = clients.get(clientId);
       if(client === undefined) {
-        client = new Client(clientId, threadPool, ioThreadPool);
+        client = new Client(clientId, threadPool, ioThreadPool, !!singlePC);
         clients.set(clientId, client);
       }
       return client;
@@ -50,14 +49,6 @@ exports.ErizoJSController = function (threadPool, ioThreadPool) {
                                  subs: clientId,
                                  stats: JSON.parse(newStats),
                                  timestamp:timeStamp.getTime()});
-    };
-
-    addListenerToConnection = (connection, callbackRpc, clientId, streamId) => {
-      if (!connection._onConnectionStatusEventListener) {
-        connection._onConnectionStatusEventListener =
-          onConnectionStatusEvent.bind(this, callbackRpc, clientId, streamId);
-        connection.on('status_event', connection._onConnectionStatusEventListener);
-      }
     };
 
     onConnectionStatusEvent = (callbackRpc, clientId, streamId, connectionEvent, newStatus) => {
@@ -145,7 +136,7 @@ exports.ErizoJSController = function (threadPool, ioThreadPool) {
     that.addPublisher = function (clientId, streamId, options, callbackRpc) {
         let publisher;
         log.info('addPublisher, clientId', clientId, 'streamId', streamId);
-        let client = getOrCreateClient(clientId);
+        let client = getOrCreateClient(clientId, options.singlePC);
 
         if (publishers[streamId] === undefined) {
           options.publicIP = that.publicIP;
@@ -161,8 +152,12 @@ exports.ErizoJSController = function (threadPool, ioThreadPool) {
           publisher.initMediaStream();
           publisher.on('callback', onAdaptSchemeNotify.bind(this, callbackRpc));
           publisher.on('periodic_stats', onPeriodicStats.bind(this, streamId, undefined));
-          addListenerToConnection(connection, callbackRpc, clientId, streamId);
-          connection.init();
+          publisher.on('status_event',
+            onConnectionStatusEvent.bind(this, callbackRpc, clientId, streamId));
+          const isNewConnection = connection.init(streamId);
+          if (options.singlePC && !isNewConnection) {
+            callbackRpc('callback', {type: 'initializing'});
+          }
         } else {
             publisher = publishers[streamId];
             if (publisher.numSubscribers === 0) {
@@ -192,7 +187,7 @@ exports.ErizoJSController = function (threadPool, ioThreadPool) {
             return;
         }
         let subscriber = publisher.getSubscriber(clientId);
-        const client = getOrCreateClient(clientId);
+        const client = getOrCreateClient(clientId, options.singlePC);
         if (subscriber !== undefined) {
             log.warn('message: Duplicated subscription will resubscribe, ' +
                      'code: ' + WARN_CONFLICT + ', streamId: ' + streamId +
@@ -203,12 +198,17 @@ exports.ErizoJSController = function (threadPool, ioThreadPool) {
         options.publicIP = that.publicIP;
         options.privateRegexp = that.privateRegexp;
         let connection = client.getOrCreateConnection(options);
+        options.label = publisher.label;
         subscriber = publisher.addSubscriber(clientId, connection, options);
         subscriber.initMediaStream();
         subscriber.on('callback', onAdaptSchemeNotify.bind(this, callbackRpc));
         subscriber.on('periodic_stats', onPeriodicStats.bind(this, clientId, streamId));
-        addListenerToConnection(connection, callbackRpc, clientId, streamId);
-        connection.init();
+        subscriber.on('status_event',
+          onConnectionStatusEvent.bind(this, callbackRpc, clientId, streamId));
+        const isNewConnection = connection.init(subscriber.erizoStreamId);
+        if (options.singlePC && !isNewConnection) {
+          callbackRpc('callback', {type: 'initializing'});
+        }
     };
 
     /*
@@ -221,7 +221,7 @@ exports.ErizoJSController = function (threadPool, ioThreadPool) {
               log.info(`message: Removing publisher, id: ${clientId}, streamId: ${streamId}`);
               for (let subscriberKey in publisher.subscribers) {
                   let subscriber = publisher.getSubscriber(subscriberKey);
-                  log.info('message: Removing subscriber, id: ' + subscriber);
+                  log.info('message: Removing subscriber, id: ' + subscriberKey);
                   closeNode(subscriber);
               }
               publisher.removeExternalOutputs().then(function() {

@@ -52,13 +52,15 @@ class MediaStream: public MediaSink, public MediaSource, public FeedbackSink,
    * Constructs an empty MediaStream without any configuration.
    */
   MediaStream(std::shared_ptr<Worker> worker, std::shared_ptr<WebRtcConnection> connection,
-      const std::string& media_stream_id);
+      const std::string& media_stream_id, const std::string& media_stream_label,
+      bool is_publisher);
   /**
    * Destructor.
    */
   virtual ~MediaStream();
   bool init();
   void close() override;
+  virtual uint32_t getMaxVideoBW();
   void syncClose();
   bool setRemoteSdp(std::shared_ptr<SdpInfo> sdp);
   bool setLocalSdp(std::shared_ptr<SdpInfo> sdp);
@@ -83,10 +85,11 @@ class MediaStream: public MediaSink, public MediaSource, public FeedbackSink,
 
   void getJSONStats(std::function<void(std::string)> callback);
 
-  void onTransportData(std::shared_ptr<DataPacket> packet, Transport *transport);
+  virtual void onTransportData(std::shared_ptr<DataPacket> packet, Transport *transport);
 
   void sendPacketAsync(std::shared_ptr<DataPacket> packet);
 
+  void setTransportInfo(std::string audio_info, std::string video_info);
 
   void setFeedbackReports(bool will_send_feedback, uint32_t target_bitrate = 0);
   void setSlideShowMode(bool state);
@@ -117,16 +120,19 @@ class MediaStream: public MediaSink, public MediaSource, public FeedbackSink,
   std::shared_ptr<Worker> getWorker() { return worker_; }
 
   std::string& getId() { return stream_id_; }
+  std::string& getLabel() { return mslabel_; }
 
   bool isSourceSSRC(uint32_t ssrc);
   bool isSinkSSRC(uint32_t ssrc);
   void parseIncomingPayloadType(char *buf, int len, packetType type);
 
   bool isPipelineInitialized() { return pipeline_initialized_; }
+  bool isRunning() { return pipeline_initialized_ && sending_; }
   Pipeline::Ptr getPipeline() { return pipeline_; }
+  bool isPublisher() { return is_publisher_; }
 
   inline std::string toLog() {
-    return "id: " + stream_id_ + ", " + printLogContext();
+    return "id: " + stream_id_ + ", role:" + (is_publisher_ ? "publisher" : "subscriber") + " " + printLogContext();
   }
 
  private:
@@ -143,6 +149,7 @@ class MediaStream: public MediaSink, public MediaSource, public FeedbackSink,
  private:
   std::shared_ptr<WebRtcConnection> connection_;
   std::string stream_id_;
+  std::string mslabel_;
   bool should_send_feedback_;
   bool slide_show_mode_;
   bool sending_;
@@ -168,6 +175,8 @@ class MediaStream: public MediaSink, public MediaSource, public FeedbackSink,
   bool video_muted_;
 
   bool pipeline_initialized_;
+
+  bool is_publisher_;
  protected:
   std::shared_ptr<SdpInfo> remote_sdp_;
   std::shared_ptr<SdpInfo> local_sdp_;

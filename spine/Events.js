@@ -1,5 +1,7 @@
 /* global */
-import Logger from './utils/Logger';
+const logger = require('./logger').logger;
+
+const log = logger.getLogger('Events');
 
 /*
  * Class EventDispatcher provides event handling to sub-classes.
@@ -39,7 +41,7 @@ const EventDispatcher = () => {
     if (!event || !event.type) {
       throw new Error('Undefined event');
     }
-    Logger.debug(`Event: ${event.type}`);
+    log.debug(`Event: ${event.type}`);
     const listeners = dispatcher.eventListeners[event.type] || [];
     for (let i = 0; i < listeners.length; i += 1) {
       listeners[i](event);
@@ -168,5 +170,8 @@ const PublisherEvent = (spec) => {
   return that;
 };
 
-export { EventDispatcher, EventEmitter, LicodeEvent, RoomEvent, StreamEvent, PublisherEvent,
-  ConnectionEvent };
+exports.EventEmitter = EventEmitter;
+exports.EventDispatcher = EventDispatcher;
+exports.ConnectionEvent = ConnectionEvent;
+//exports = { EventDispatcher, EventEmitter, LicodeEvent, RoomEvent, StreamEvent, PublisherEvent,
+//  ConnectionEvent };
