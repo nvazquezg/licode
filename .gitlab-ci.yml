@@ -15,3 +15,5 @@ build_job:
     artifacts:
         paths:
             - .
+    only:
+        - tags
