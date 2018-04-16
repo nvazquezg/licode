@@ -5,18 +5,19 @@ set -e
 SCRIPT=`pwd`/$0
 FILENAME=`basename $SCRIPT`
 PATHNAME=`dirname $SCRIPT`
-ROOT=$PATHNAME/..
+ROOT=`dirname $SCRIPT`
 BUILD_DIR=$ROOT/build
+LICODE_ROOT="$ROOT"/..
 CURRENT_DIR=`pwd`
-NVM_CHECK="$PATHNAME"/checkNvm.sh
-
-DB_DIR="$BUILD_DIR"/db
-EXTRAS=$ROOT/extras
+NVM_CHECK="$LICODE_ROOT"/scripts/checkNvm.sh
+EXTRAS=$LICODE_ROOT/extras
 
 . $NVM_CHECK
+nvm use
+
+cd $LICODE_ROOT/erizo_controller/erizoClient/
+$LICODE_ROOT/node_modules/.bin/gulp erizofc
 
 cd $EXTRAS/recorder
-
-nvm use
 npm install --loglevel error express body-parser morgan errorhandler socket.io-client
 cd $CURRENT_DIR

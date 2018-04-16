@@ -12,6 +12,7 @@ build_job:
         - ./scripts/installUbuntuDeps.sh --cleanup
         - ./scripts/installErizo.sh -eacdfs
         - ./scripts/installNuve.sh
+        - ./scripts/installRecorder.sh
     artifacts:
         paths:
             - .

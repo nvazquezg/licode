@@ -11,6 +11,9 @@ var express = require('express'),
     Erizo = require('./erizofc'),
     request = require('request');
 
+const nativeConnectionHelpers = require('../../spine/NativeConnectionHelpers');
+const nativeConnectionManager = require('../../spine/NativeConnectionManager.js');
+
 var options = {
     key: fs.readFileSync('../../cert/key.pem').toString(),
     cert: fs.readFileSync('../../cert/cert.pem').toString()
@@ -381,7 +384,7 @@ app.use(function(req, res, next) {
 });
 
 var connect = function(token, idSala, callback, callbackError) {
-    let room = Erizo.Room(newIo, undefined, {token:token});
+    let room = Erizo.Room(newIo, nativeConnectionHelpers, nativeConnectionManager, { token });
 
     //room-connected no trae room definido, así que se implementa aquí la función para tener room en el ámbito
     room.addEventListener("room-connected", function(event) {
