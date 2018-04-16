@@ -82,8 +82,7 @@ var onRemoveStream = function(event) {
                 "name": "onDestroyVideoPod"
             })
         };
-    //console.log('RUELE', 'http://10.201.54.155/api/nsr/record/' + streamsRecording[stream.getID()].roomKey + '/autoEvent');
-    remoteCall('POST', 'http://10.201.54.155/api/nsr/record/' + streamsRecording[stream.getID()].roomKey + '/autoEvent', params,
+    remoteCall('POST', process.env.API + 'nsr/record/' + streamsRecording[stream.getID()].roomKey + '/autoEvent', params,
         function (res) {
             console.log('REMOVED STREAM: ', stream.getID(), res);
             delete streamsRecording[stream.getID()];
@@ -142,7 +141,7 @@ var initRecording = function(room, stream, callback, callbackError) {
                     })
                 };
 
-            remoteCall('POST', 'http://10.201.54.155/api/nsr/record/' + idSala + '/autoEvent', params,
+            remoteCall('POST', process.env.API + 'nsr/record/' + idSala + '/autoEvent', params,
                 function (res) {
                     callback(id);
                 }, function (err){
@@ -183,7 +182,7 @@ var startRecording = function(stream, callback, callbackError) {
                     })
                 };
 
-            remoteCall('POST', 'http://10.201.54.155/api/nsr/record/' + idSala + '/autoEvent', params,
+            remoteCall('POST', process.env.API + 'nsr/record/' + idSala + '/autoEvent', params,
                 function (res) {
                     callback(id);
                 }, function (err){
