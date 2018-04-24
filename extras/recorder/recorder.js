@@ -11,6 +11,9 @@ var express = require('express'),
     Erizo = require('./erizofc'),
     request = require('request');
 
+const logger = require('../../spine/logger').logger;
+const log = logger.getLogger('Recorder');
+
 const nativeConnectionHelpers = require('../../spine/NativeConnectionHelpers');
 const nativeConnectionManager = require('../../spine/NativeConnectionManager.js');
 
@@ -57,16 +60,16 @@ app.use(function(req, res, next) {
 N.API.init(config.nuve.superserviceID, config.nuve.superserviceKey, 'http://localhost:3000/');
 
 var onAddStream = function(event) {
-    //console.log('ADDSTREAM', event);
+    //log.info('ADDSTREAM', event);
     startRecording(event.stream, function(res){
-        console.log('ADD STREAM: ', event.stream.getID(), 'RECORDING:', res);
+        log.info('ADD STREAM: ', event.stream.getID(), 'RECORDING:', res);
     }, function (error) {
-        console.log('ADD STREAM ERROR: ', event.stream.getID(), 'ERROR:', error);
+        log.info('ADD STREAM ERROR: ', event.stream.getID(), 'ERROR:', error);
     });
 };
 
 var onRemoveStream = function(event) {
-    console.log('REMOVESTREAM', event.stream.getID(), event.stream.getAttributes().name);
+    log.info('REMOVESTREAM', event.stream.getID(), event.stream.getAttributes().name);
     //TODO: si la grabación se ha detenido, no se llegarán a registrar estos eventos, evitar realizar la llamada?
     let stream = event.stream;
     let params =
@@ -84,28 +87,28 @@ var onRemoveStream = function(event) {
         };
     remoteCall('POST', process.env.API + 'nsr/record/' + streamsRecording[stream.getID()].roomKey + '/autoEvent', params,
         function (res) {
-            console.log('REMOVED STREAM: ', stream.getID(), res);
+            log.info('REMOVED STREAM: ', stream.getID(), res);
             delete streamsRecording[stream.getID()];
         }, function (err){
-            console.log('ERROR REMOVING STREAM: ', stream.getID(), err);
+            log.info('ERROR REMOVING STREAM: ', stream.getID(), err);
             delete streamsRecording[stream.getID()];
         });
 };
 
 var onStreamSubscribed = function(event) {
-    console.log('STREAMSUBSCRIBED', event);
+    log.info('STREAMSUBSCRIBED', event);
 };
 
 var onData = function(event) {
-    console.log('DATA', event);
+    log.info('DATA', event);
 };
 
 var getIDSala = function(roomID) {
     let idSala = -1;
     Object.keys(roomsRecording).forEach(function(index) {
-        console.log('FILTERING', roomsRecording[index].roomID, roomID);
+        log.info('FILTERING', roomsRecording[index].roomID, roomID);
         if(roomsRecording[index].roomID === roomID){
-            console.log('ID_SALA', index);
+            log.info('ID_SALA', index);
             idSala = index;
             return index;
         };
@@ -114,16 +117,16 @@ var getIDSala = function(roomID) {
 };
 
 var initRecording = function(room, stream, callback, callbackError) {
-    // console.log('INITRECORDING-ROOM', room);
-    // console.log('INITRECORDING-STREAM', stream);
+    // log.info('INITRECORDING-ROOM', room);
+    // log.info('INITRECORDING-STREAM', stream);
     if(streamsRecording[stream.getID()]) {
-        console.log('Already recording stream', stream.getID(), streamsRecording[stream.getID()]);
+        log.info('Already recording stream', stream.getID(), streamsRecording[stream.getID()]);
         callbackError('Already recording stream');
     }
 
     room.startRecording(stream, function(id, error) {
         if(id !== undefined) {
-            console.log('INIT STREAM: ', stream.getID(), 'RECORDING:', id);
+            log.info('INIT STREAM: ', stream.getID(), 'RECORDING:', id);
             let idSala = getIDSala(room.roomID);
             streamsRecording[stream.getID()] = {nameStream: id, roomKey: idSala};
             //TODO: PARAMETRIZE
@@ -149,22 +152,22 @@ var initRecording = function(room, stream, callback, callbackError) {
                 });
         }
         else {
-            console.log('INIT STREAM ERROR: ', stream.getID(), 'ERROR:', error);
+            log.info('INIT STREAM ERROR: ', stream.getID(), 'ERROR:', error);
             callbackError(error);
         }
     });
 };
 
 var startRecording = function(stream, callback, callbackError) {
-    //console.log('STARTRECORDING', stream);
+    //log.info('STARTRECORDING', stream);
     if(streamsRecording[stream.getID()]) {
-        console.log('Already recording stream', stream.getID(), streamsRecording[stream.getID()]);
+        log.info('Already recording stream', stream.getID(), streamsRecording[stream.getID()]);
         callbackError('Already recording stream');
     }
 
     stream.room.startRecording(stream, function(id, error) {
         if(id !== undefined) {
-            console.log('START STREAM: ', stream.getID(), 'RECORDING:', id);
+            log.info('START STREAM: ', stream.getID(), 'RECORDING:', id);
             let idSala = getIDSala(stream.room.roomID);
             streamsRecording[stream.getID()] = {nameStream: id, roomKey: idSala};
             //TODO: PARAMETRIZE
@@ -191,19 +194,19 @@ var startRecording = function(stream, callback, callbackError) {
 
         }
         else {
-            console.log('START STREAM ERROR: ', stream.getID(), 'ERROR:', error);
+            log.info('START STREAM ERROR: ', stream.getID(), 'ERROR:', error);
             callbackError(error);
         }
     });
 };
 
 var stopRecording = function(room, stream, callback, callbackError) {
-    console.log('STOPRECORDING', stream.getID(), stream.getAttributes().name);
+    log.info('STOPRECORDING', stream.getID(), stream.getAttributes().name);
     //TODO: check if not recording?
     room.stopRecording(streamsRecording[stream.getID()].nameStream, function(id) {
         callback(id);
     }, function (err) {
-        console.log('ERROR STOPPED STREAM: ', stream.getID(), 'ERROR:', err);
+        log.info('ERROR STOPPED STREAM: ', stream.getID(), 'ERROR:', err);
         callbackError(false);
     });
 };
@@ -216,24 +219,24 @@ var remoteCall = function(method, url, body, callback, callbackError) {
         json: true
     }, function (error, response, body) {
        if(error) {
-           console.log('ERROR', error);
+           log.info('ERROR', error);
            callbackError(false);
        }
        else if(response.statusCode === 200){
            callback(response.body);
        }
        else {
-           console.log('BODY ERROR' , response.statusCode, body);
+           log.info('BODY ERROR' , response.statusCode, body);
            callbackError(false);
        }
     });
 };
 
 app.post('/record/stop', function(req, res) {
-    console.log('Stopping recording: ', req.body);
+    log.info('Stopping recording: ', req.body);
 
     if(!req.body.idSala){
-        console.log('Missing required parameter idSala');
+        log.info('Missing required parameter idSala');
         res.status(422).send('Missing required parameter');
         return;
     }
@@ -241,21 +244,21 @@ app.post('/record/stop', function(req, res) {
     let room = roomsRecording[req.body.idSala];
 
     if(typeof roomsRecording[req.body.idSala] === 'undefined') {
-        console.log('Sala not recording');
+        log.info('Sala not recording');
         res.status(409).send({result: 'Not recording'});
         return;
     } else if (roomsRecording[req.body.idSala].roomID === 'unloading') {
         // roomsRecording[req.body.idSala] = {roomID: 'stuck'};
-        console.log('Sala already stopping');
+        log.info('Sala already stopping');
         res.status(409).send({result: 'Already stopping', data: roomsRecording[req.body.idSala].roomID});
         return;
     } else if (roomsRecording[req.body.idSala].roomID === 'loading') {
-        console.log('Sala just starting recording');
+        log.info('Sala just starting recording');
         res.status(409).send({result: 'Just started recording', data: roomsRecording[req.body.idSala].roomID});
         return;
     }
     else if (room.state !== 2) {
-        console.log('Not connected to Room');
+        log.info('Not connected to Room');
         res.status(409).send({result: 'Not connected to Room', data: roomsRecording[req.body.idSala].roomID});
         return;
     }
@@ -265,9 +268,9 @@ app.post('/record/stop', function(req, res) {
 
     var disconnect = function(){
         setTimeout(function () {
-            console.log('DISCONNECT', room.roomID);
+            log.info('DISCONNECT', room.roomID);
             room.disconnect();
-            console.log('DELETE FROM GLOBAL LIST');
+            log.info('DELETE FROM GLOBAL LIST');
             delete roomsRecording[req.body.idSala];
             res.status(200).send({result: 'OK', roomID: room.roomID, idSala: req.body.idSala});
 
@@ -279,40 +282,40 @@ app.post('/record/stop', function(req, res) {
         disconnect();
     }
     room.remoteStreams.forEach(function(value, index) {
-        //console.log('STREAM', index, value);
+        //log.info('STREAM', index, value);
         stopRecording(room, value, function (result) {
             if (result === true) {
                 ++numStopped;
             }
             if (numStopped === room.remoteStreams.keys().length) {
-                console.log('ALL STOPPED', numStopped, room.remoteStreams.keys().length);
+                log.info('ALL STOPPED', numStopped, room.remoteStreams.keys().length);
                 disconnect();
             }
             else {
-                console.log('STOPPED', numStopped, room.remoteStreams.keys().length);
+                log.info('STOPPED', numStopped, room.remoteStreams.keys().length);
             }
 
         }, function (err) {
-            console.log('ERROR STOPPING', value, err);
+            log.info('ERROR STOPPING', value, err);
             res.status(500).send({result: 'Error stopping recordings', stream: value.getID()});
         });
     });
 });
 
 var createToken = function (roomId, idSala, final, error) {
-    console.log('Creating token', roomId, idSala);
+    log.info('Creating token', roomId, idSala);
     N.API.createToken(roomId, 'recorder', 'presenter', function(token) {
-        console.log('Token ready', token);
+        log.info('Token ready', token);
         connect(token, idSala, function(value) {
-            console.log('Conection OK');
+            log.info('Conection OK');
             final({code: 200, result: 'OK', token: token, idSala: idSala, streams: value});
         }, function (err) {
-            console.error('Error connecting to room for recording');
+            log.error('Error connecting to room for recording');
             error({code: 500, result: 'Error connecting to room for recording', error: err});
         });
 
     }, function(err) {
-        console.error('Error creating token', err);
+        log.error('Error creating token', err);
         delete roomsRecording[req.body.idSala];
         error({code: 401, result: 'Error creating token', error: err});
     });
@@ -327,25 +330,25 @@ var getRoom = function (name, callback, final, error) {
                 return;
             }
         }
-        console.error('Room not found', name);
+        log.error('Room not found', name);
         error({code: 404, result: 'Room not found: ' + name});
     }, function(err){
-        console.error('GET ROOM ERROR: ', error);
+        log.error('GET ROOM ERROR: ', error);
         delete roomsRecording[req.body.idSala];
         error({code: 401, result: 'Error getting room', error: err});
     });
 };
 
 app.post('/record/start', function(req, res) {
-    console.log('Starting recording: ',req.body);
+    log.info('Starting recording: ',req.body);
 
     if(!req.body.idSala){
-        console.log('Missing required parameter idSala');
+        log.info('Missing required parameter idSala');
         res.status(422).send('Missing required parameter');
         return;
     }
     if(roomsRecording[req.body.idSala]) {
-        console.log('Sala already recording');
+        log.info('Sala already recording');
         res.status(409).send({result: 'Already recording', data: roomsRecording[req.body.idSala].roomID});
         return;
     } else { //Evitar condiciones de carrera
@@ -355,7 +358,7 @@ app.post('/record/start', function(req, res) {
     getRoom(+req.body.idSala, createToken, function(result) {
         res.status(result.code).send(result);
     }, function (err) {
-        console.error("Falló el inicio de grabación");
+        log.error("Falló el inicio de grabación");
         res.status(err.code).send({result: err.result, error: err.error});
     });
 });
@@ -393,17 +396,17 @@ var connect = function(token, idSala, callback, callbackError) {
     //room-connected no trae room definido, así que se implementa aquí la función para tener room en el ámbito
     room.addEventListener("room-connected", function(event) {
         roomsRecording[idSala] = room;
-        //console.log('CONNECTED', event);
-        console.log('CONNECTED TO ROOM: ', room.roomID);
+        //log.info('CONNECTED', event);
+        log.info('CONNECTED TO ROOM: ', room.roomID);
 
         let initiated = 0;
         if(event.streams.length === 0) {
             callback(initiated);
         }
         for(let s of event.streams) {
-            //console.log('STREAM1', s.getID());
+            //log.info('STREAM1', s.getID());
             initRecording(room, s, function(value) {
-                console.log('RECORDING INITIATED: ', initiated , value);
+                log.info('RECORDING INITIATED: ', initiated , value);
                 if(++initiated === event.streams.length){
                     callback(initiated);
                 }
@@ -411,10 +414,10 @@ var connect = function(token, idSala, callback, callbackError) {
         }
     });
     room.addEventListener("room-disconnected", function(event) {
-        console.log("room-disconnected");
+        log.info("room-disconnected");
     });
     room.addEventListener("room-error", function(event) {
-        console.error("room-error", event);
+        log.error("room-error", event);
     });
     room.addEventListener('stream-added', onAddStream);
     room.addEventListener('stream-removed', onRemoveStream);
@@ -424,39 +427,39 @@ var connect = function(token, idSala, callback, callbackError) {
     //Guardar la sala en el ámbito global para poder monitorizarlas
     //roomsRecording[room.roomID] = room;
 
-    //console.log('ROOM', room);
+    //log.info('ROOM', room);
 };
 
 //Inicializa grabaciones en curso
 var resumeRecording = function(sala){
-    console.log('Resume: ', sala);
+    log.info('Resume: ', sala);
     getRoom(sala.ID_Sala, createToken, function(result) {
-        console.log("Resume OK: " + result.code);
+        log.info("Resume OK: " + result.code);
     }, function (err) {
-        console.error("Falló el inicio de grabación" + err);
+        log.error("Falló el inicio de grabación" + err);
     });
 };
 
 remoteCall('GET', process.env.API + 'nsr/record', {},
     function (res) {
-        console.log(res);
+        log.info(res);
 
         for(let sala of res) {
             roomsRecording[sala.ID_Sala] = {roomID: 'loading', remoteStreams:[]};
             resumeRecording(sala);
             setTimeout(function() {
-                console.log("CHECK RECORDING STARTED");
+                log.info("CHECK RECORDING STARTED");
                 if( roomsRecording[sala.ID_Sala].roomID === 'loading' ){
-                    console.error("CHECK RECORDING FAILED, I'LL BE BACK");
+                    log.error("CHECK RECORDING FAILED, I'LL BE BACK");
                     process.exit(-1);
                 }
                 else {
-                    console.log("CHECK RECORDING OK");
+                    log.info("CHECK RECORDING OK");
                 }
             }, 10000);
         }
     }, function (err){
-        console.err('ERROR RESUMING: ', err);
+        log.error('ERROR RESUMING: ', err);
     });
 
 app.listen(3002);
