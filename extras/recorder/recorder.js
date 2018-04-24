@@ -299,51 +299,40 @@ app.post('/record/stop', function(req, res) {
     });
 });
 
-var createToken = function (roomId, idSala, res) {
+var createToken = function (roomId, idSala, final, error) {
     console.log('Creating token', roomId, idSala);
     N.API.createToken(roomId, 'recorder', 'presenter', function(token) {
         console.log('Token ready', token);
         connect(token, idSala, function(value) {
-            if(res) {
-                res.status(200).send({result: 'OK', token: token, idSala: idSala, streams: value});
-            }
-        }, function (error) {
-            if(res) {
-                res.status(500).send({result: 'Error initiating recording', error: error});
-            }
-            console.error('Error initiating recording');
+            console.log('Conection OK');
+            final({code: 200, result: 'OK', token: token, idSala: idSala, streams: value});
+        }, function (err) {
+            console.error('Error connecting to room for recording');
+            error({code: 500, result: 'Error connecting to room for recording', error: err});
         });
 
-    }, function(error) {
-        console.log('Error creating token', error);
+    }, function(err) {
+        console.error('Error creating token', err);
         delete roomsRecording[req.body.idSala];
-        if(res) {
-            res.status(401).send({result: 'Error creating token', error: error});
-        }
-        console.error('Error creating token');
+        error({code: 401, result: 'Error creating token', error: err});
     });
 };
 
-var getRoom = function (name, callback, res) {
+var getRoom = function (name, callback, final, error) {
     N.API.getRooms(function (roomlist){
         const rooms = JSON.parse(roomlist);
         for (var room of rooms) {
             if (room.name === name){
-                callback(room._id, name, res);
+                callback(room._id, name, final, error);
                 return;
             }
         }
-
-        console.log('Room not found', name);
-        if(res) {
-            res.status(404).send('Room not found');
-        }
-    }, function(error){
-        console.log('GET ROOM ERROR: ', error);
+        console.error('Room not found', name);
+        error({code: 404, result: 'Room not found: ' + name});
+    }, function(err){
+        console.error('GET ROOM ERROR: ', error);
         delete roomsRecording[req.body.idSala];
-        if(res) {
-            res.status(401).send({result: 'Error getting room', error: error});
-        }
+        error({code: 401, result: 'Error getting room', error: err});
     });
 };
 
@@ -360,12 +349,15 @@ app.post('/record/start', function(req, res) {
         res.status(409).send({result: 'Already recording', data: roomsRecording[req.body.idSala].roomID});
         return;
     } else { //Evitar condiciones de carrera
-        roomsRecording[req.body.idSala] = {roomID: 'loading'};
+        roomsRecording[req.body.idSala] = {roomID: 'loading', remoteStreams: []};
     }
 
-
-
-    getRoom(+req.body.idSala, createToken, res);
+    getRoom(+req.body.idSala, createToken, function(result) {
+        res.status(result.code).send(result);
+    }, function (err) {
+        console.error("Falló el inicio de grabación");
+        res.status(err.code).send({result: err.result, error: err.error});
+    });
 });
 
 app.get('/record/list', function(req, res) {
@@ -400,6 +392,7 @@ var connect = function(token, idSala, callback, callbackError) {
 
     //room-connected no trae room definido, así que se implementa aquí la función para tener room en el ámbito
     room.addEventListener("room-connected", function(event) {
+        roomsRecording[idSala] = room;
         //console.log('CONNECTED', event);
         console.log('CONNECTED TO ROOM: ', room.roomID);
 
@@ -417,6 +410,12 @@ var connect = function(token, idSala, callback, callbackError) {
             }, callbackError);
         }
     });
+    room.addEventListener("room-disconnected", function(event) {
+        console.log("room-disconnected");
+    });
+    room.addEventListener("room-error", function(event) {
+        console.error("room-error", event);
+    });
     room.addEventListener('stream-added', onAddStream);
     room.addEventListener('stream-removed', onRemoveStream);
     //room.addEventListener('stream-subscribed', onStreamSubscribed);
@@ -424,23 +423,40 @@ var connect = function(token, idSala, callback, callbackError) {
 
     //Guardar la sala en el ámbito global para poder monitorizarlas
     //roomsRecording[room.roomID] = room;
-    roomsRecording[idSala] = room;
+
     //console.log('ROOM', room);
 };
 
 //Inicializa grabaciones en curso
+var resumeRecording = function(sala){
+    console.log('Resume: ', sala);
+    getRoom(sala.ID_Sala, createToken, function(result) {
+        console.log("Resume OK: " + result.code);
+    }, function (err) {
+        console.error("Falló el inicio de grabación" + err);
+    });
+};
+
 remoteCall('GET', process.env.API + 'nsr/record', {},
     function (res) {
-    console.log(res);
+        console.log(res);
 
         for(let sala of res) {
-        //res.forEach(function(sala, index) {
-            roomsRecording[sala.ID_Sala] = {roomID: 'loading'};
-            console.log('SALA GRABANDO ANTERIORMENTE: ', sala);
-            getRoom(+sala.ID_Sala, createToken, null);
+            roomsRecording[sala.ID_Sala] = {roomID: 'loading', remoteStreams:[]};
+            resumeRecording(sala);
+            setTimeout(function() {
+                console.log("CHECK RECORDING STARTED");
+                if( roomsRecording[sala.ID_Sala].roomID === 'loading' ){
+                    console.error("CHECK RECORDING FAILED, I'LL BE BACK");
+                    process.exit(-1);
+                }
+                else {
+                    console.log("CHECK RECORDING OK");
+                }
+            }, 10000);
         }
     }, function (err){
-        console.log('ERROR CARGANDO SALA GRABANDO: ', err);
+        console.err('ERROR RESUMING: ', err);
     });
 
 app.listen(3002);
