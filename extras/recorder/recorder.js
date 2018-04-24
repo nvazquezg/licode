@@ -220,7 +220,7 @@ var remoteCall = function(method, url, body, callback, callbackError) {
            callbackError(false);
        }
        else if(response.statusCode === 200){
-           callback(true);
+           callback(response.body);
        }
        else {
            console.log('BODY ERROR' , response.statusCode, body);
@@ -299,6 +299,54 @@ app.post('/record/stop', function(req, res) {
     });
 });
 
+var createToken = function (roomId, idSala, res) {
+    console.log('Creating token', roomId, idSala);
+    N.API.createToken(roomId, 'recorder', 'presenter', function(token) {
+        console.log('Token ready', token);
+        connect(token, idSala, function(value) {
+            if(res) {
+                res.status(200).send({result: 'OK', token: token, idSala: idSala, streams: value});
+            }
+        }, function (error) {
+            if(res) {
+                res.status(500).send({result: 'Error initiating recording', error: error});
+            }
+            console.error('Error initiating recording');
+        });
+
+    }, function(error) {
+        console.log('Error creating token', error);
+        delete roomsRecording[req.body.idSala];
+        if(res) {
+            res.status(401).send({result: 'Error creating token', error: error});
+        }
+        console.error('Error creating token');
+    });
+};
+
+var getRoom = function (name, callback, res) {
+    N.API.getRooms(function (roomlist){
+        const rooms = JSON.parse(roomlist);
+        for (var room of rooms) {
+            if (room.name === name){
+                callback(room._id, name, res);
+                return;
+            }
+        }
+
+        console.log('Room not found', name);
+        if(res) {
+            res.status(404).send('Room not found');
+        }
+    }, function(error){
+        console.log('GET ROOM ERROR: ', error);
+        delete roomsRecording[req.body.idSala];
+        if(res) {
+            res.status(401).send({result: 'Error getting room', error: error});
+        }
+    });
+};
+
 app.post('/record/start', function(req, res) {
     console.log('Starting recording: ',req.body);
 
@@ -315,44 +363,9 @@ app.post('/record/start', function(req, res) {
         roomsRecording[req.body.idSala] = {roomID: 'loading'};
     }
 
-    var createToken = function (roomId, idSala) {
-        console.log('Creating token');
-        N.API.createToken(roomId, 'recorder', 'presenter', function(token) {
-            console.log('Token ready', token);
-            connect(token, idSala, function(value) {
-                res.status(200).send({result: 'OK', token: token, idSala: idSala, streams: value});
-            }, function (error) {
-                res.status(500).send({result: 'Error initiating recording', error: error});
-            });
 
-        }, function(error) {
-            console.log('Error creating token', error);
-            delete roomsRecording[req.body.idSala];
-            res.status(401).send({result: 'Error creating token', error: error});
-        });
-    };
 
-    var getRoom = function (name, callback) {
-        N.API.getRooms(function (roomlist){
-            const rooms = JSON.parse(roomlist);
-            for (var room of rooms) {
-                if (room.name === name){
-
-                    callback(room._id, name);
-                    return;
-                }
-            }
-
-            console.log('Room not found', name);
-            res.status(404).send('Room not found');
-        }, function(error){
-            console.log('GET ROOM ERROR: ', error);
-            delete roomsRecording[req.body.idSala];
-            res.status(401).send({result: 'Error getting room', error: error});
-        });
-    };
-
-    getRoom(+req.body.idSala, createToken);
+    getRoom(+req.body.idSala, createToken, res);
 });
 
 app.get('/record/list', function(req, res) {
@@ -414,6 +427,21 @@ var connect = function(token, idSala, callback, callbackError) {
     roomsRecording[idSala] = room;
     //console.log('ROOM', room);
 };
+
+//Inicializa grabaciones en curso
+remoteCall('GET', process.env.API + 'nsr/record', {},
+    function (res) {
+    console.log(res);
+
+        for(let sala of res) {
+        //res.forEach(function(sala, index) {
+            roomsRecording[sala.ID_Sala] = {roomID: 'loading'};
+            console.log('SALA GRABANDO ANTERIORMENTE: ', sala);
+            getRoom(+sala.ID_Sala, createToken, null);
+        }
+    }, function (err){
+        console.log('ERROR CARGANDO SALA GRABANDO: ', err);
+    });
 
 app.listen(3002);
 
