@@ -90,7 +90,7 @@ var onRemoveStream = function(event) {
         };
     remoteCall('POST', process.env.API + 'nsr/record/' + streamsRecording[stream.getID()].roomKey + '/autoEvent', params,
         function (res) {
-            log.info('REMOVED STREAM: ', stream.getID(), res);
+            log.info('REMOVED STREAM: ', stream.getID());
             delete streamsRecording[stream.getID()];
         }, function (err){
             log.info('ERROR REMOVING STREAM: ', stream.getID(), err);
@@ -124,11 +124,11 @@ var initRecording = function(room, stream, callback, callbackError) {
     // log.info('INITRECORDING-STREAM', stream);
     if(streamsRecording[stream.getID()]) {
         log.info('Already recording stream', stream.getID(), streamsRecording[stream.getID()]);
-        callbackError('Already recording stream');
+        callback('Already recording stream');
         return;
     } else if (!stream.hasAudio() && !stream.hasVideo() && !stream.hasScreen()) {
         log.info('Stream has nothing to record');
-        callbackError('Stream has nothing to record');
+        callback('Stream has nothing to record');
         return;
     }
 
@@ -170,11 +170,11 @@ var startRecording = function(stream, callback, callbackError) {
     //log.info('STARTRECORDING', stream);
     if(streamsRecording[stream.getID()]) {
         log.info('Already recording stream', stream.getID(), streamsRecording[stream.getID()]);
-        callbackError('Already recording stream');
+        callback('Already recording stream');
         return;
     } else if (!stream.hasAudio() && !stream.hasVideo() && !stream.hasScreen()) {
         log.info('Stream has nothing to record');
-        callbackError('Stream has nothing to record');
+        callback('Stream has nothing to record');
         return;
     }
 
@@ -215,6 +215,10 @@ var startRecording = function(stream, callback, callbackError) {
 
 var stopRecording = function(room, stream, callback, callbackError) {
     log.info('STOPRECORDING', stream.getID(), stream.getAttributes().name);
+    if(!streamsRecording[stream.getID()]) { //Si el stream no está definido no hay que detener nada
+        callback(true);
+        return;
+    }
     //TODO: check if not recording?
     room.stopRecording(streamsRecording[stream.getID()].nameStream, function(id) {
         callback(id);
