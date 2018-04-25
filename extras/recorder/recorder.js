@@ -72,6 +72,9 @@ var onRemoveStream = function(event) {
     log.info('REMOVESTREAM', event.stream.getID(), event.stream.getAttributes().name);
     //TODO: si la grabación se ha detenido, no se llegarán a registrar estos eventos, evitar realizar la llamada?
     let stream = event.stream;
+    if(!streamsRecording[stream.getID()]) { //Si el stream no está definido no hay que insertar nada
+        return;
+    }
     let params =
         {
             "Tipo_Evento": 12,
@@ -122,6 +125,11 @@ var initRecording = function(room, stream, callback, callbackError) {
     if(streamsRecording[stream.getID()]) {
         log.info('Already recording stream', stream.getID(), streamsRecording[stream.getID()]);
         callbackError('Already recording stream');
+        return;
+    } else if (!stream.hasAudio() && !stream.hasVideo() && !stream.hasScreen()) {
+        log.info('Stream has nothing to record');
+        callbackError('Stream has nothing to record');
+        return;
     }
 
     room.startRecording(stream, function(id, error) {
@@ -163,6 +171,11 @@ var startRecording = function(stream, callback, callbackError) {
     if(streamsRecording[stream.getID()]) {
         log.info('Already recording stream', stream.getID(), streamsRecording[stream.getID()]);
         callbackError('Already recording stream');
+        return;
+    } else if (!stream.hasAudio() && !stream.hasVideo() && !stream.hasScreen()) {
+        log.info('Stream has nothing to record');
+        callbackError('Stream has nothing to record');
+        return;
     }
 
     stream.room.startRecording(stream, function(id, error) {
@@ -369,7 +382,9 @@ app.get('/record/list', function(req, res) {
     Object.keys(roomsRecording).forEach(function(key) {
         let streams = [];
         roomsRecording[key].remoteStreams.forEach(function(value, index) {
-            streams.push(streamsRecording[value.getID()]);
+            if(streamsRecording[value.getID()]) {
+                streams.push(streamsRecording[value.getID()]);
+            }
         });
         result.roomsRecording[key] = {
             roomID: roomsRecording[key].roomID,
