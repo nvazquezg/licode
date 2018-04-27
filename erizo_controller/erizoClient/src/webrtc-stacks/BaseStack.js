@@ -29,19 +29,21 @@ const BaseStack = (specInput) => {
   if (specBase.forceTurn === true) {
     that.pcConfig.iceTransportPolicy = 'relay';
   }
-  if (specBase.audio === undefined) {
-    specBase.audio = true;
+  that.audio = specBase.audio;
+  that.video = specBase.video;
+  if (that.audio === undefined) {
+    that.audio = true;
   }
-  if (specBase.video === undefined) {
-    specBase.video = true;
+  if (that.video === undefined) {
+    that.video = true;
   }
   specBase.remoteCandidates = [];
   specBase.localCandidates = [];
   specBase.remoteDescriptionSet = false;
 
   that.mediaConstraints = {
-    offerToReceiveVideo: (specBase.video !== undefined && specBase.video !== false),
-    offerToReceiveAudio: (specBase.audio !== undefined && specBase.audio !== false),
+    offerToReceiveVideo: (that.video !== undefined && that.video !== false),
+    offerToReceiveAudio: (that.audio !== undefined && that.audio !== false),
   };
 
   that.peerConnection = new RTCPeerConnection(that.pcConfig, that.con);
@@ -230,6 +232,18 @@ const BaseStack = (specInput) => {
     that.peerConnection.close();
   };
 
+  that.setSimulcast = (enable) => {
+    that.simulcast = enable;
+  };
+
+  that.setVideo = (video) => {
+    that.video = video;
+  };
+
+  that.setAudio = (audio) => {
+    that.audio = audio;
+  };
+
   that.updateSpec = (configInput, streamId, callback = () => {}) => {
     const config = configInput;
     const shouldApplyMaxVideoBWToSdp = specBase.p2p && config.maxVideoBW;
@@ -281,6 +295,7 @@ const BaseStack = (specInput) => {
         (config.slideShowMode !== undefined) ||
         (config.muteStream !== undefined) ||
         (config.qualityLayer !== undefined) ||
+        (config.minLayer !== undefined) ||
         (config.video !== undefined)) {
       Logger.debug('MaxVideoBW Changed to ', config.maxVideoBW);
       Logger.debug('MinVideo Changed to ', config.minVideoBW);

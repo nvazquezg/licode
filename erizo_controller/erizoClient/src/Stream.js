@@ -114,8 +114,8 @@ const Stream = (altConnectionHelpers, specInput) => {
       if (that.pc === undefined) {
         that.pc = ErizoMap();
       }
-      this.pc.add(p2pKey, pc);
-      that.pc.on('ice-state-change', onICEConnectionStateChange);
+      that.pc.add(p2pKey, pc);
+      pc.on('ice-state-change', onICEConnectionStateChange);
       return;
     }
     if (that.pc) {
@@ -407,6 +407,19 @@ const Stream = (altConnectionHelpers, specInput) => {
     }
     const config = { qualityLayer: { spatialLayer: -1, temporalLayer: -1 } };
     that.checkOptions(config, true);
+    that.pc.updateSpec(config, that.getID(), callback);
+  };
+
+  // eslint-disable-next-line no-underscore-dangle
+  that._setMinSpatialLayer = (spatialLayer, callback = () => {}) => {
+    if (that.room && that.room.p2p) {
+      Logger.warning('setMinSpatialLayer is not implemented in p2p streams');
+      callback('error');
+      return;
+    }
+    const config = { minLayer: { spatialLayer } };
+    that.checkOptions(config, true);
+    Logger.debug('Calling updateSpec with config', config);
     that.pc.updateSpec(config, that.getID(), callback);
   };
 
