@@ -32,6 +32,7 @@ if (config.erizoController.sslCaCerts) {
 //TODO: Vbles a mongo?
 var roomsRecording = {};
 var streamsRecording = {};
+var host = '';
 
 var app = express();
 
@@ -85,7 +86,8 @@ var onRemoveStream = function(event) {
                     "name": stream.getAttributes().name
                 },
                 "nameStream": streamsRecording[stream.getID()].nameStream,
-                "name": "onDestroyVideoPod"
+                "name": "onDestroyVideoPod",
+                "host": host
             })
         };
     remoteCall('POST', process.env.API + 'nsr/record/' + streamsRecording[stream.getID()].roomKey + '/autoEvent', params,
@@ -148,7 +150,8 @@ var initRecording = function(room, stream, callback, callbackError) {
                             "name": stream.getAttributes().name
                         },
                         "nameStream": id,
-                        "name": "onCreateVideoPod"
+                        "name": "onCreateVideoPod",
+                        "host": host
                     })
                 };
 
@@ -194,7 +197,8 @@ var startRecording = function(stream, callback, callbackError) {
                             "name": stream.getAttributes().name
                         },
                         "nameStream": id,
-                        "name": "onCreateVideoPod"
+                        "name": "onCreateVideoPod",
+                        "host": host
                     })
                 };
 
@@ -410,6 +414,10 @@ app.use(function(req, res, next) {
 });
 
 var connect = function(token, idSala, callback, callbackError) {
+    const b64 = JSON.parse(Buffer.from(token, 'base64'));
+    host = b64.host;
+    console.log("HOST", host);
+
     let room = Erizo.Room(newIo, nativeConnectionHelpers, nativeConnectionManager, { token });
 
     //room-connected no trae room definido, así que se implementa aquí la función para tener room en el ámbito
