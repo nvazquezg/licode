@@ -70,7 +70,7 @@ var onAddStream = function(event) {
 };
 
 var onRemoveStream = function(event) {
-    log.info('REMOVESTREAM', event.stream.getID(), event.stream.getAttributes().name);
+    log.info('REMOVESTREAM', event.stream.getID(), event.stream.getAttributes().name, 'SCREEN:', event.stream.hasScreen());
     //TODO: si la grabación se ha detenido, no se llegarán a registrar estos eventos, evitar realizar la llamada?
     let stream = event.stream;
     if(!streamsRecording[stream.getID()]) { //Si el stream no está definido no hay que insertar nada
@@ -78,7 +78,7 @@ var onRemoveStream = function(event) {
     }
     let params =
         {
-            "Tipo_Evento": 12,
+            "Tipo_Evento": (stream.hasScreen() === true ? 63 : 12),
             "params": JSON.stringify({
                 "user": {
                     "perfil": "presenter",
@@ -86,7 +86,7 @@ var onRemoveStream = function(event) {
                     "name": stream.getAttributes().name
                 },
                 "nameStream": streamsRecording[stream.getID()].nameStream,
-                "name": "onDestroyVideoPod",
+                "name": (stream.hasScreen() === true ? "onDestroyDesktop" : "onDestroyVideoPod"),
                 "host": host
             })
         };
@@ -136,13 +136,13 @@ var initRecording = function(room, stream, callback, callbackError) {
 
     room.startRecording(stream, function(id, error) {
         if(id !== undefined) {
-            log.info('INIT STREAM: ', stream.getID(), 'RECORDING:', id);
+            log.info('INIT STREAM: ', stream.getID(), 'RECORDING:', id, 'SCREEN:', stream.hasScreen());
             let idSala = getIDSala(room.roomID);
             streamsRecording[stream.getID()] = {nameStream: id, roomKey: idSala};
             //TODO: PARAMETRIZE
             let params =
                 {
-                    "Tipo_Evento": 11,
+                    "Tipo_Evento": (stream.hasScreen() === true ? 62 : 11),
                     "params": JSON.stringify({
                         "user": {
                             "perfil": "presenter",
@@ -150,7 +150,7 @@ var initRecording = function(room, stream, callback, callbackError) {
                             "name": stream.getAttributes().name
                         },
                         "nameStream": id,
-                        "name": "onCreateVideoPod",
+                        "name": (stream.hasScreen() === true ? "onCreateDesktop": "onCreateVideoPod"),
                         "host": host
                     })
                 };
@@ -183,13 +183,13 @@ var startRecording = function(stream, callback, callbackError) {
 
     stream.room.startRecording(stream, function(id, error) {
         if(id !== undefined) {
-            log.info('START STREAM: ', stream.getID(), 'RECORDING:', id);
+            log.info('START STREAM: ', stream.getID(), 'RECORDING:', id , 'SCREEN:', stream.hasScreen());
             let idSala = getIDSala(stream.room.roomID);
             streamsRecording[stream.getID()] = {nameStream: id, roomKey: idSala};
             //TODO: PARAMETRIZE
             let params =
                 {
-                    "Tipo_Evento": 11,
+                    "Tipo_Evento": (stream.hasScreen() === true ? 62 : 11),
                     "params": JSON.stringify({
                         "user": {
                             "perfil": "presenter",
@@ -197,7 +197,7 @@ var startRecording = function(stream, callback, callbackError) {
                             "name": stream.getAttributes().name
                         },
                         "nameStream": id,
-                        "name": "onCreateVideoPod",
+                        "name": (stream.hasScreen() === true ? "onCreateDesktop" : "onCreateVideoPod"),
                         "host": host
                     })
                 };
