@@ -11,6 +11,8 @@ var log = logger.getLogger('NuveAuthenticator');
 var cache = {};
 
 var checkTimestamp = function (ser, params) {
+    //Anula esta validacion por problemas con la sincronizacion de timestamps
+    return true;
     var lastParams = cache[ser.name],
         lastTS,
         newTS,

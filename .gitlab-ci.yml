@@ -1,0 +1,20 @@
+image: ubuntu:14.04
+
+stages:
+    - build
+
+before_script:
+    - apt-get update && apt-get install -y git wget curl
+
+build_job:
+    stage: build
+    script:
+        - ./scripts/installUbuntuDeps.sh --cleanup --enable-gpl
+        - ./scripts/installErizo.sh -eacdfs
+        - ./scripts/installNuve.sh
+        - ./scripts/installRecorder.sh
+    artifacts:
+        paths:
+            - .
+    only:
+        - tags
