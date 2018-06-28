@@ -223,14 +223,15 @@ exports.ErizoJSController = function (threadPool, ioThreadPool) {
                   let subscriber = publisher.getSubscriber(subscriberKey);
                   log.info('message: Removing subscriber, id: ' + subscriberKey);
                   closeNode(subscriber);
+                  publisher.removeSubscriber(subscriberKey);
               }
               publisher.removeExternalOutputs().then(function() {
                 closeNode(publisher);
+                delete publishers[streamId];
                 publisher.muxer.close(function(message) {
                     log.info('message: muxer closed succesfully, ' +
                              'id: ' + streamId + ', ' +
                              logger.objectToLog(message));
-                    delete publishers[streamId];
                     var count = 0;
                     for (var k in publishers) {
                         if (publishers.hasOwnProperty(k)) {
