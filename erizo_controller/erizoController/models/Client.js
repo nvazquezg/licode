@@ -379,7 +379,12 @@ class Client extends events.EventEmitter {
     let stream = this.room.getStreamById(streamId);
 
     if (stream.hasAudio() || stream.hasVideo() || stream.hasScreen()) {
-        var mediaOptions = {mediaConfiguration: this.token.mediaConfiguration};
+        var mediaOptions = {
+            mediaConfiguration: this.token.mediaConfiguration,
+            hasAudio: stream.hasAudio(),
+            hasVideo: stream.hasVideo() || stream.hasScreen()
+        };
+        
         this.room.controller.addExternalOutput(streamId, url, mediaOptions, function (result) {
             if (result === 'success') {
                 log.info('message: startRecorder, ' +
