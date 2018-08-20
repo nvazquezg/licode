@@ -65,11 +65,11 @@ config.erizoController.networkinterface = ''; //default value: ''
 config.erizoController.hostname = ''; //default value: ''
 config.erizoController.port = 8080; //default value: 8080
 // Use true if clients communicate with erizoController over SSL
-config.erizoController.ssl = false; //default value: false
+config.erizoController.ssl = true; //default value: false
 
 // This configuration is used by erizoController server to listen for connections
 // Use true if erizoController listens in HTTPS.
-config.erizoController.listen_ssl = false; //default value: false
+config.erizoController.listen_ssl = true; //default value: false
 config.erizoController.listen_port = 8080; //default value: 8080
 
 // Custom location for SSL certificates. Default located in /cert
@@ -90,15 +90,17 @@ config.erizoController.interval_time_keepAlive = 1000; // default value: 1000
 
 // Roles to be used by services
 config.erizoController.roles =
-{"presenter": {"publish": true, "subscribe": true, "record": true, "stats": true, "controlhandlers": true},
-    "viewer": {"subscribe": true},
-    "viewerWithData": {"subscribe": true, "publish": {"audio": false, "video": false, "screen": false, "data": true}}}; // default value: {"presenter":{"publish": true, "subscribe":true, "record":true}, "viewer":{"subscribe":true}, "viewerWithData":{"subscribe":true, "publish":{"audio":false,"video":false,"screen":false,"data":true}}}
+    {"presenter": {"publish": true, "subscribe": true, "record": true, "stats": true, "controlhandlers": true},
+        "owner": {"publish": true, "subscribe": true, "record": true, "stats": true, "controlhandlers": true},
+        "recorder": {"subscribe": true, "record": true, "stats":true, "controlhandlers": true},
+        "viewer": {"subscribe": true},
+        "viewerWithData": {"subscribe": true, "publish": {"audio": false, "video": false, "screen": false, "data": true}}}; // default value: {"presenter":{"publish": true, "subscribe":true, "record":true}, "viewer":{"subscribe":true}, "viewerWithData":{"subscribe":true, "publish":{"audio":false,"video":false,"screen":false,"data":true}}}
 
 // If true, erizoController sends report to rabbitMQ queue "report_handler"
 config.erizoController.report = {
-    session_events: false, 		// Session level events -- default value: false
-    connection_events: false, 	// Connection (ICE) level events -- default value: false
-    rtcp_stats: false				// RTCP stats -- default value: false
+    session_events: true, 		// Session level events -- default value: false
+    connection_events: true, 	// Connection (ICE) level events -- default value: false
+    rtcp_stats: true				// RTCP stats -- default value: false
 };
 
 // Subscriptions to rtcp_stats via AMQP
@@ -109,7 +111,7 @@ config.erizoController.reportSubscriptions = {
 };
 
 // If undefined, the path will be /tmp/
-config.erizoController.recording_path = undefined; // default value: undefined
+config.erizoController.recording_path = '/opt/recordings/'; // default value: undefined
 
 // Erizo Controller Cloud Handler policies are in erizo_controller/erizoController/ch_policies/ folder
 config.erizoController.cloudHandlerPolicy = 'default_policy.js'; // default value: 'default_policy.js'
@@ -180,7 +182,7 @@ config.erizo.minport = 0; // default value: 0
 config.erizo.maxport = 0; // default value: 0
 
 //Use of internal nICEr library instead of libNice.
-config.erizo.useNicer = false;  // default value: false
+config.erizo.useNicer = true;  // default value: false
 
 config.erizo.disabledHandlers = []; // there are no handlers disabled by default
 
