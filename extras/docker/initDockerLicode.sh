@@ -6,6 +6,8 @@ BUILD_DIR="$ROOT"/build
 DB_DIR="$BUILD_DIR"/db
 EXTRAS="$ROOT"/extras
 NVM_CHECK="$ROOT"/scripts/checkNvm.sh
+SERVID=""
+SERVKEY=""
 
 parse_arguments(){
   if [ -z "$1" ]; then
@@ -15,8 +17,10 @@ parse_arguments(){
     NUVE=true
     ERIZOCONTROLLER=true
     ERIZOAGENT=true
-    BASICEXAMPLE=true
+    BASICEXAMPLE=false
     ERIZODEBUG=false
+    RECORDER=true
+    ACKUARIA=true
 
   else
     while [ "$1" != "" ]; do
@@ -41,6 +45,12 @@ parse_arguments(){
         ;;
         "--basicExample")
         BASICEXAMPLE=true
+        ;;
+        "--recorder")
+        RECORDER=true
+        ;;
+        "--ackuaria")
+        RECORDER=true
         ;;
       esac
       shift
@@ -109,13 +119,13 @@ run_mongo() {
 run_nuve() {
   echo "Starting Nuve"
   cd $ROOT/nuve/nuveAPI
-  node nuve.js &
+  /usr/bin/pm2 start
   sleep 5
 }
 run_erizoController() {
   echo "Starting erizoController"
   cd $ROOT/erizo_controller/erizoController
-  node erizoController.js &
+  /usr/bin/pm2 start
 }
 run_erizoAgent() {
   echo "Starting erizoAgent"
@@ -123,7 +133,7 @@ run_erizoAgent() {
   if [ "$ERIZODEBUG" == "true" ]; then
     node erizoAgent.js -d &
   else
-    node erizoAgent.js &
+    /usr/bin/pm2 start
   fi
 }
 run_basicExample() {
@@ -132,6 +142,28 @@ run_basicExample() {
   cp $ROOT/nuve/nuveClient/dist/nuve.js $EXTRAS/basic_example/
   cd $EXTRAS/basic_example
   node basicServer.js &
+}
+run_recorder() {
+  echo "Starting recorder"
+  sleep 5
+  cp $ROOT/nuve/nuveClient/dist/nuve.js $EXTRAS/recorder/
+  cp $ROOT/erizo_controller/erizoClient/dist/production/erizofc/erizofc.js $EXTRAS/recorder/
+  cd $EXTRAS/recorder
+  /usr/bin/pm2 start
+}
+run_ackuaria() {
+  echo "Starting ackuaria"
+  sleep 5
+  cd /opt/ackuaria
+  cp $ROOT/nuve/nuveClient/dist/nuve.js .
+
+  replacement=s/^config\.nuve\.superserviceID.*/config\.nuve\.superserviceID\=\'${SERVID}\'\;/
+  sed $replacement ackuaria_config.js.template > ackuaria_config.js.tmp
+  replacement=s/^config\.nuve\.superserviceKey.*/config\.nuve\.superserviceKey\=\'${SERVKEY}\'\;/
+  sed $replacement ackuaria_config.js.tmp > ackuaria_config.js
+  rm ackuaria_config.js.tmp
+
+  /usr/bin/pm2 start
 }
 
 parse_arguments $*
@@ -177,5 +209,14 @@ if [ "$BASICEXAMPLE" == "true" ]; then
   run_basicExample
 fi
 
+if [ "$RECORDER" == "true" ]; then
+  run_recorder
+fi
+
+if [ "$ACKUARIA" == "true" ]; then
+  run_ackuaria
+fi
+
+/usr/bin/pm2 log
 
 wait

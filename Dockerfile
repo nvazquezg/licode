@@ -17,6 +17,10 @@ RUN ./installUbuntuDeps.sh --cleanup --fast
 
 WORKDIR /opt
 
+RUN curl -sL https://deb.nodesource.com/setup_8.x | sudo -E bash -
+RUN sudo apt-get install -y nodejs
+RUN npm install pm2@latest -g
+
 COPY . /opt/licode
 
 RUN mkdir /opt/licode/.git
@@ -26,7 +30,13 @@ WORKDIR /opt/licode/scripts
 
 RUN ./installErizo.sh -dfeacs && \
     ./../nuve/installNuve.sh && \
-    ./installBasicExample.sh
+    ./installRecorder.sh
+
+WORKDIR /opt
+
+RUN git clone http://gitlab+deploy-token-3:z5Efi6CeUKPggzFK8csm@gitlab.intecca.local/aplicaciones/ackuaria.git
+WORKDIR /opt/ackuaria
+RUN npm install
 
 WORKDIR /opt
 
