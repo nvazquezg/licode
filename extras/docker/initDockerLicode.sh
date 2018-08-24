@@ -194,7 +194,11 @@ if [ "$NUVE" == "true" ]; then
 fi
 
 if [ "$ERIZOCONTROLLER" == "true" ]; then
+  echo "config.erizoController.port = '$ERIZO_PORT';" >> /opt/licode/licode_config.js
   echo "config.erizoController.publicIP = '$PUBLIC_IP';" >> /opt/licode/licode_config.js
+  echo "config.erizoController.ssl = true;" >> /opt/licode/licode_config.js
+  echo "config.erizoController.listen_ssl = true;" >> /opt/licode/licode_config.js
+  echo "config.erizoController.hostname = '$PUBLIC_HOSTNAME';" >> /opt/licode/licode_config.js
   run_erizoController
 fi
 
