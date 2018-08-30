@@ -149,7 +149,7 @@ run_recorder() {
   cp $ROOT/nuve/nuveClient/dist/nuve.js $EXTRAS/recorder/
   cp $ROOT/erizo_controller/erizoClient/dist/production/erizofc/erizofc.js $EXTRAS/recorder/
   cd $EXTRAS/recorder
-  /usr/bin/pm2 start
+  /usr/bin/pm2 start ecosystem.config.js --env $ENVIRONMENT
 }
 run_ackuaria() {
   echo "Starting ackuaria"
