@@ -199,6 +199,7 @@ if [ "$ERIZOCONTROLLER" == "true" ]; then
   echo "config.erizoController.ssl = true;" >> /opt/licode/licode_config.js
   echo "config.erizoController.listen_ssl = true;" >> /opt/licode/licode_config.js
   echo "config.erizoController.hostname = '$PUBLIC_HOSTNAME';" >> /opt/licode/licode_config.js
+  echo "config.erizoController.allowSinglePC = $SINGLE_PC;" >> /opt/licode/licode_config.js
   run_erizoController
 fi
 
@@ -206,6 +207,7 @@ if [ "$ERIZOAGENT" == "true" ]; then
   echo "config.erizoAgent.publicIP = '$PUBLIC_IP';" >> /opt/licode/licode_config.js
   echo "config.erizo.minport = '$MIN_PORT';" >> /opt/licode/licode_config.js
   echo "config.erizo.maxport = '$MAX_PORT';" >> /opt/licode/licode_config.js
+  echo "config.erizoAgent.maxProcesses = $MAX_PROCESSES;" >> /opt/licode/licode_config.js
   run_erizoAgent
 fi
 
