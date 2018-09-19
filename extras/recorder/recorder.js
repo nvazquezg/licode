@@ -457,7 +457,7 @@ var connect = function(token, idSala, callback, callbackError) {
     room.addEventListener('stream-added', onAddStream);
     room.addEventListener('stream-removed', onRemoveStream);
     //room.addEventListener('stream-subscribed', onStreamSubscribed);
-    room.connect();
+    room.connect({singlePC: true});
 
     //Guardar la sala en el ámbito global para poder monitorizarlas
     //roomsRecording[room.roomID] = room;
