@@ -148,7 +148,7 @@ const Stream = (altConnectionHelpers, specInput) => {
         Logger.info('Requested access to local media');
         let videoOpt = spec.video;
         if (videoOpt === true || spec.screen === true) {
-          videoOpt = videoOpt === true ? {} : videoOpt;
+          videoOpt = videoOpt === true || videoOpt === null ? {} : videoOpt;
           if (that.videoSize !== undefined) {
             videoOpt.width = {
               min: that.videoSize[0],
@@ -232,16 +232,17 @@ const Stream = (altConnectionHelpers, specInput) => {
       that.stream = undefined;
     }
     if (that.pc && !that.p2p) {
-      that.pc.off('add-stream', spec.onStreamAddedToPC);
-      that.pc.off('remove-stream', spec.onStreamRemovedFroPC);
-      that.pc.off('ice-state-change', spec.onICEConnectionStateChange);
+      that.pc.off('add-stream', onStreamAddedToPC);
+      that.pc.off('remove-stream', onStreamRemovedFroPC);
+      that.pc.off('ice-state-change', onICEConnectionStateChange);
     } else if (that.pc && that.p2p) {
       that.pc.forEach((pc) => {
-        pc.off('add-stream', spec.onStreamAddedToPC);
-        pc.off('remove-stream', spec.onStreamRemovedFroPC);
-        pc.off('ice-state-change', spec.onICEConnectionStateChange);
+        pc.off('add-stream', onStreamAddedToPC);
+        pc.off('remove-stream', onStreamRemovedFroPC);
+        pc.off('ice-state-change', onICEConnectionStateChange);
       });
     }
+    that.removeAllListeners();
   };
 
   that.play = (elementID, optionsInput) => {
