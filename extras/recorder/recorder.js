@@ -420,6 +420,8 @@ var connect = function(token, idSala, callback, callbackError) {
 
     let room = Erizo.Room(newIo, nativeConnectionHelpers, nativeConnectionManager, { token });
 
+    let interval = null;
+
     //room-connected no trae room definido, así que se implementa aquí la función para tener room en el ámbito
     room.addEventListener("room-connected", function(event) {
         roomsRecording[idSala] = room;
@@ -439,9 +441,15 @@ var connect = function(token, idSala, callback, callbackError) {
                 }
             }, callbackError);
         }
+
+        //Programar la comprobación de grabación en curso
+        interval = setInterval(checkRecordingLength, 300000, idSala);
     });
     room.addEventListener("room-disconnected", function(event) {
         log.info("room-disconnected");
+        if(interval !== null) {
+            clearInterval(interval);
+        }
     });
     room.addEventListener("room-error", function(event) {
         log.error("room-error", event);
@@ -465,6 +473,16 @@ var resumeRecording = function(sala){
     }, function (err) {
         log.error("Falló el inicio de grabación" + err);
     });
+};
+
+var checkRecordingLength = function(idSala) {
+    remoteCall('GET', process.env.API + 'nsr/record/' + idSala + '/checkLength', {},
+        function (res) {
+            console.log("Check length " + idSala, res);
+        },
+        function (err) {
+            console.error("Error checking length " + idSala, err);
+        });
 };
 
 remoteCall('GET', process.env.API + 'nsr/record', {},
