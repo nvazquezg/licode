@@ -14,8 +14,9 @@ class Subscriber extends NodeClass {
     this.connection.mediaConfiguration = options.mediaConfiguration;
     this.connection.addMediaStream(this.erizoStreamId, options, false);
     this._connectionListener = this._emitStatusEvent.bind(this);
+    this._mediaStreamListener = this._onMediaStreamEvent.bind(this);
     connection.on('status_event', this._connectionListener);
-    connection.on('media_stream_event', this._onMediaStreamEvent.bind(this));
+    connection.on('media_stream_event', this._mediaStreamListener);
     this.mediaStream = connection.getMediaStream(this.erizoStreamId);
     this.publisher = publisher;
     this.ready = false;
@@ -66,7 +67,7 @@ class Subscriber extends NodeClass {
 
   _onMediaStreamEvent(mediaStreamEvent) {
     if (mediaStreamEvent.type === 'slideshow_fallback_update') {
-      this.publisher.setSlideShow(mediaStreamEvent.message === 
+      this.publisher.setSlideShow(mediaStreamEvent.message ===
         'false'? false: true, this.clientId, true);
     }
   }
@@ -124,8 +125,9 @@ class Subscriber extends NodeClass {
     log.debug(`msg: Closing subscriber, streamId:${this.streamId}`);
     this.publisher = undefined;
     if (this.connection) {
-      this.connection.removeListener('status_event', this._connectionListener);
       this.connection.removeMediaStream(this.mediaStream.id);
+      this.connection.removeListener('status_event', this._connectionListener);
+      this.connection.removeListener('media_stream_event', this._mediaStreamListener);
     }
     if (this.mediaStream && this.mediaStream.monitorInterval) {
       clearInterval(this.mediaStream.monitorInterval);
