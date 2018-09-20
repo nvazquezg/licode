@@ -32,6 +32,16 @@ RUN ./installErizo.sh -dfeacs && \
     ./../nuve/installNuve.sh && \
     ./installRecorder.sh
 
+# Add crontab file in the cron directory
+ADD crontab /etc/cron.d/cleanupPods
+
+# Give execution rights on the cron job
+RUN chmod 0644 /etc/cron.d/cleanupPods
+RUN touch /var/log/cron.log
+
+RUN service cron start
+
+
 WORKDIR /opt
 
 RUN git clone http://gitlab+deploy-token-3:z5Efi6CeUKPggzFK8csm@gitlab.intecca.local/aplicaciones/ackuaria.git

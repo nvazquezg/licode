@@ -1,0 +1,4 @@
+# minuto   hora   dia mes   diaDeLaSemana   comando
+* 6 * * * root /usr/bin/wget -a /tmp/upload.log -O - "http://www.intecca.uned.es/api/amfphp2/?contentType=application/json" --post-data "{\"serviceName\":\"nsr.NSRManagementService\",\"methodName\":\"getScriptLimpiezaErizo\",\"parameters\":[{\"Host\":\"$PUBLIC_HOSTNAME:$ERIZO_PORT\"}]}" --no-check-certificate --keep-session-cookies  |  sed 's/\\n/\n/g' |sed 's/"//g' | sed 's/\\//g'  > /tmp/cleanup.sh && /bin/bash /tmp/cleanup.sh  >> /var/log/cron.log 2>&1
+
+# An empty line is required at the end of this file for a valid cron file.
