@@ -152,12 +152,6 @@ bool WebRtcConnection::createOffer(bool video_enabled, bool audioEnabled, bool b
   std::string msg = this->getLocalSdp();
   maybeNotifyWebRtcConnectionEvent(global_state_, msg);
 
-  std::weak_ptr<WebRtcConnection> weak_this = shared_from_this();
-  forEachMediaStreamAsync([weak_this] (const std::shared_ptr<MediaStream> &media_stream) {
-    if (auto connection = weak_this.lock()) {
-      media_stream->setLocalSdp(connection->local_sdp_);
-    }
-  });
   return true;
 }
 
@@ -227,7 +221,7 @@ std::shared_ptr<SdpInfo> WebRtcConnection::getLocalSdpInfo() {
       return;
     }
     std::vector<uint32_t> video_ssrc_list = std::vector<uint32_t>();
-    if (media_stream->getVideoSinkSSRC() != kDefaultVideoSinkSSRC) {
+    if (media_stream->getVideoSinkSSRC() != kDefaultVideoSinkSSRC && media_stream->getVideoSinkSSRC() != 0) {
       video_ssrc_list.push_back(media_stream->getVideoSinkSSRC());
     }
     ELOG_DEBUG("%s message: getting local SDPInfo, stream_id: %s, audio_ssrc: %u",
@@ -235,7 +229,7 @@ std::shared_ptr<SdpInfo> WebRtcConnection::getLocalSdpInfo() {
     if (!video_ssrc_list.empty()) {
       local_sdp_->video_ssrc_map[media_stream->getLabel()] = video_ssrc_list;
     }
-    if (media_stream->getAudioSinkSSRC() != kDefaultAudioSinkSSRC) {
+    if (media_stream->getAudioSinkSSRC() != kDefaultAudioSinkSSRC && media_stream->getAudioSinkSSRC() != 0) {
       local_sdp_->audio_ssrc_map[media_stream->getLabel()] = media_stream->getAudioSinkSSRC();
     }
   });
@@ -293,7 +287,6 @@ void WebRtcConnection::setRemoteSdpsToMediaStreams(std::string stream_id) {
     (*stream)->asyncTask([weak_this, stream_id] (const std::shared_ptr<MediaStream> &media_stream) {
       if (auto connection = weak_this.lock()) {
         media_stream->setRemoteSdp(connection->remote_sdp_);
-        media_stream->setLocalSdp(connection->local_sdp_);
         ELOG_DEBUG("%s message: setting remote SDP to stream, stream: %s", connection->toLog(), media_stream->getId());
         connection->onRemoteSdpsSetToMediaStreams(stream_id);
       }
