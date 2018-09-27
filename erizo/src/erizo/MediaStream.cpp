@@ -51,6 +51,7 @@ MediaStream::MediaStream(std::shared_ptr<Worker> worker,
   const std::string& media_stream_label,
   bool is_publisher) :
     audio_enabled_{false}, video_enabled_{false},
+    media_stream_event_listener_{nullptr},
     connection_{std::move(connection)},
     stream_id_{media_stream_id},
     mslabel_ {media_stream_label},
@@ -61,7 +62,8 @@ MediaStream::MediaStream(std::shared_ptr<Worker> worker,
     pipeline_initialized_{false},
     is_publisher_{is_publisher},
     simulcast_{false},
-    bitrate_from_max_quality_layer_{0} {
+    bitrate_from_max_quality_layer_{0},
+    video_bitrate_{0} {
   setVideoSinkSSRC(kDefaultVideoSinkSSRC);
   setAudioSinkSSRC(kDefaultAudioSinkSSRC);
   ELOG_INFO("%s message: constructor, id: %s",
@@ -94,16 +96,6 @@ MediaStream::~MediaStream() {
 
 uint32_t MediaStream::getMaxVideoBW() {
   uint32_t bitrate = rtcp_processor_ ? rtcp_processor_->getMaxVideoBW() : 0;
-  return bitrate;
-}
-
-uint32_t MediaStream::getBitrateSent() {
-  uint32_t bitrate = 0;
-  std::string video_ssrc = std::to_string(is_publisher_ ? getVideoSourceSSRC() : getVideoSinkSSRC());
-  if (stats_->getNode().hasChild(video_ssrc) &&
-      stats_->getNode()[video_ssrc].hasChild("bitrateCalculated")) {
-    bitrate = stats_->getNode()[video_ssrc]["bitrateCalculated"].value();
-  }
   return bitrate;
 }
 
@@ -158,7 +150,7 @@ bool MediaStream::setRemoteSdp(std::shared_ptr<SdpInfo> sdp) {
   if (!sending_) {
     return true;
   }
-  remote_sdp_ = sdp;
+  remote_sdp_ =  std::make_shared<SdpInfo>(*sdp.get());
   if (remote_sdp_->videoBandwidth != 0) {
     ELOG_DEBUG("%s message: Setting remote BW, maxVideoBW: %u", toLog(), remote_sdp_->videoBandwidth);
     this->rtcp_processor_->setMaxVideoBW(remote_sdp_->videoBandwidth*1000);
@@ -168,7 +160,6 @@ bool MediaStream::setRemoteSdp(std::shared_ptr<SdpInfo> sdp) {
     pipeline_->notifyUpdate();
     return true;
   }
-
 
   bundle_ = remote_sdp_->isBundle;
   auto video_ssrc_list_it = remote_sdp_->video_ssrc_map.find(getLabel());
@@ -204,11 +195,6 @@ bool MediaStream::setRemoteSdp(std::shared_ptr<SdpInfo> sdp) {
 
   initializeStats();
 
-  return true;
-}
-
-bool MediaStream::setLocalSdp(std::shared_ptr<SdpInfo> sdp) {
-  local_sdp_ = std::move(sdp);
   return true;
 }
 
@@ -483,7 +469,7 @@ void MediaStream::read(std::shared_ptr<DataPacket> packet) {
   uint32_t recvSSRC = 0;
   if (!chead->isRtcp()) {
     recvSSRC = head->getSSRC();
-  } else if (chead->packettype == RTCP_Sender_PT) {  // Sender Report
+  } else if (chead->packettype == RTCP_Sender_PT || chead->packettype == RTCP_SDES_PT) {  // Sender Report
     recvSSRC = chead->getSSRC();
   }
   // DELIVER FEEDBACK (RR, FEEDBACK PACKETS)
@@ -795,9 +781,9 @@ void MediaStream::setQualityLayer(int spatial_layer, int temporal_layer) {
   });
 }
 
-void MediaStream::setMinDesiredSpatialLayer(int spatial_layer) {
-  asyncTask([spatial_layer] (std::shared_ptr<MediaStream> media_stream) {
-    media_stream->quality_manager_->setMinDesiredSpatialLayer(spatial_layer);
+void MediaStream::enableSlideShowBelowSpatialLayer(bool enabled, int spatial_layer) {
+  asyncTask([enabled, spatial_layer] (std::shared_ptr<MediaStream> media_stream) {
+    media_stream->quality_manager_->enableSlideShowBelowSpatialLayer(enabled, spatial_layer);
   });
 }
 
