@@ -5,7 +5,8 @@ MAINTAINER Lynckia
 WORKDIR /opt
 
 # Download latest version of the code and install dependencies
-RUN  apt-get update && apt-get install -y git wget curl
+RUN  apt-get update && apt-get install -y git wget curl tzdata
+RUN ln -fs /usr/share/zoneinfo/Europe/Madrid /etc/localtime && dpkg-reconfigure -f noninteractive tzdata
 
 COPY .nvmrc package.json /opt/licode/
 
@@ -33,14 +34,11 @@ RUN ./installErizo.sh -dfeacs && \
     ./installRecorder.sh
 
 # Add crontab file in the cron directory
-ADD crontab /etc/cron.d/cleanupPods
+ADD crontab /etc/cron.d/schedules
 
 # Give execution rights on the cron job
-RUN chmod 0644 /etc/cron.d/cleanupPods
+RUN chmod 0644 /etc/cron.d/schedules
 RUN touch /var/log/cron.log
-
-RUN service cron start
-
 
 WORKDIR /opt
 

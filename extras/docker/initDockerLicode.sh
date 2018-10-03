@@ -223,6 +223,9 @@ if [ "$ACKUARIA" == "true" ]; then
   run_ackuaria
 fi
 
+#start services
+service cron start
+
 /usr/bin/pm2 log
 
 wait
