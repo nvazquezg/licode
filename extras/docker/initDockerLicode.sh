@@ -163,6 +163,8 @@ run_ackuaria() {
   sed $replacement ackuaria_config.js.tmp > ackuaria_config.js
   rm ackuaria_config.js.tmp
 
+  sed -i "s/^config.ackuaria.useDB = false;/config.ackuaria.useDB = true;/" ackuaria_config.js
+
   /usr/bin/pm2 start
 }
 
