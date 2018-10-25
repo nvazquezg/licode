@@ -471,7 +471,12 @@ var resumeRecording = function(sala){
     getRoom(sala.ID_Sala, createToken, function(result) {
         log.info("Resume OK: " + result.code);
     }, function (err) {
-        log.error("Falló el inicio de grabación" + err);
+        if(err.code === 404){
+            log.error("La sala no se encuentra en este servidor");
+            roomsRecording[sala.ID_Sala].roomID = 'in other recorder';
+        } else {
+            log.error("Falló el inicio de grabación" + err.err);
+        }
     });
 };
 
