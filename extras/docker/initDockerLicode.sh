@@ -223,8 +223,21 @@ if [ "$ACKUARIA" == "true" ]; then
   run_ackuaria
 fi
 
+#Collectd configuration
+if ! [ -z "$PRIVATE_HOSTNAME" ]; then
+    sed -i "s/^#Hostname.*$/Hostame \"$PRIVATE_HOSTNAME\"/" /etc/collectd/collectd.conf
+    sed -i "s/^FQDNLookup true$/#FQDNLookup true/" /etc/collectd/collectd.conf
+    sed -i "s/^#LoadPlugin network$/LoadPlugin network/" /etc/collectd/collectd.conf
+    sed -i "s/^#LoadPlugin tcpconns$/LoadPlugin tcpconns/" /etc/collectd/collectd.conf
+    echo "
+    <Plugin network>
+        Server \"$COLLECTD_IP\" \"$COLLECTD_PORT\"
+    </Plugin> " >> /etc/collectd/collectd.conf
+fi
+
 #start services
 service cron start
+service collectd start
 
 /usr/bin/pm2 log
 
