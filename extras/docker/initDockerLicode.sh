@@ -237,6 +237,9 @@ if ! [ -z "$PRIVATE_HOSTNAME" ]; then
     </Plugin> " >> /etc/collectd/collectd.conf
 fi
 
+printenv|egrep  'HOST|PORT'|cat - /etc/cron.d/schedules > /etc/cron.d/schedules.tmp
+mv /etc/cron.d/schedules.tmp /etc/cron.d/schedules
+
 #start services
 service cron start
 service collectd start
