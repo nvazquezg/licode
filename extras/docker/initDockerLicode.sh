@@ -235,6 +235,11 @@ if ! [ -z "$PRIVATE_HOSTNAME" ]; then
     <Plugin network>
         Server \"$COLLECTD_IP\" \"$COLLECTD_PORT\"
     </Plugin> " >> /etc/collectd/collectd.conf
+
+    echo "
+    <Plugin exec>
+        Exec \"daemon\" \"/opt/usageLicode.sh\"
+    </Plugin> " >> /etc/collectd/collectd.conf
 fi
 
 printenv|egrep  'HOST|PORT' > /etc/cron.d/schedules.tmp

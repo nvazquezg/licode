@@ -5,7 +5,7 @@ MAINTAINER Lynckia
 WORKDIR /opt
 
 # Download latest version of the code and install dependencies
-RUN  apt-get update && apt-get install -y git wget curl tzdata collectd vim net-tools lsof
+RUN  apt-get update && apt-get install -y git wget curl tzdata collectd vim net-tools lsof sudo
 RUN ln -fs /usr/share/zoneinfo/Europe/Madrid /etc/localtime && dpkg-reconfigure -f noninteractive tzdata
 
 COPY .nvmrc package.json /opt/licode/
@@ -45,6 +45,15 @@ WORKDIR /opt
 RUN git clone http://gitlab+deploy-token-3:z5Efi6CeUKPggzFK8csm@gitlab.intecca.local/aplicaciones/ackuaria.git
 WORKDIR /opt/ackuaria
 RUN npm install
+
+
+# Para monitorizar conexiones con collectd
+ADD portsUDP.sh /opt
+ADD usageLicode.sh /opt
+
+RUN echo 'ALL  ALL=(ALL) NOPASSWD:/usr/bin/lsof' >> /etc/sudoers
+RUN echo 'ALL  ALL=(ALL) NOPASSWD:/bin/netstat' >> /etc/sudoers
+RUN echo 'ALL  ALL=(ALL) NOPASSWD:/bin/cat' >> /etc/sudoers
 
 WORKDIR /opt
 
