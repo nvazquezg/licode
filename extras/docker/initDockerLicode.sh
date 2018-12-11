@@ -230,6 +230,7 @@ if ! [ -z "$PRIVATE_HOSTNAME" ]; then
     sed -i "s/^#Hostname.*$/Hostname \"$PRIVATE_HOSTNAME\"/" /etc/collectd/collectd.conf
     sed -i "s/^FQDNLookup true$/#FQDNLookup true/" /etc/collectd/collectd.conf
     sed -i "s/^#LoadPlugin network$/LoadPlugin network/" /etc/collectd/collectd.conf
+    sed -i "s/^#LoadPlugin exec$/LoadPlugin exec/" /etc/collectd/collectd.conf
     sed -i "s/^#LoadPlugin tcpconns$/LoadPlugin tcpconns/" /etc/collectd/collectd.conf
     echo "
     <Plugin network>

@@ -50,6 +50,7 @@ RUN npm install
 # Para monitorizar conexiones con collectd
 ADD portsUDP.sh /opt
 ADD usageLicode.sh /opt
+RUN chmod 0755 /opt/usageLicode.sh
 
 RUN echo 'ALL  ALL=(ALL) NOPASSWD:/usr/bin/lsof' >> /etc/sudoers
 RUN echo 'ALL  ALL=(ALL) NOPASSWD:/bin/netstat' >> /etc/sudoers
