@@ -54,7 +54,7 @@ do
 #$UDP
         #echo "PUTVAL $HOSTNAME/exec-licode/gauge-PUBLISHER interval=$INTERVAL N:$PUBLISHERS" | tee -a /tmp/licodeMon.log
 
-        SUBSCRIBERS=$(/bin/bash /opt/portsUDP.sh|grep subscriber|wc -l )
+        SUBSCRIBERS=$((/bin/bash /opt/portsUDP.sh|grep subscriber|wc -l ) 2> /dev/null ) ;
         #echo "PUTVAL $HOSTNAME/exec-licode/gauge-SUBSCRIBERS interval=$INTERVAL N:$SUBSCRIBERS" | tee -a /tmp/licodeMon.log
 
         UDP_FAILED=$(expr $UDP - $PUBLISHERS - $SUBSCRIBERS)
