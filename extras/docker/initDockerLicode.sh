@@ -237,15 +237,26 @@ if ! [ -z "$PRIVATE_HOSTNAME" ]; then
     sed -i "s/^#LoadPlugin network$/LoadPlugin network/" /etc/collectd/collectd.conf
     sed -i "s/^#LoadPlugin exec$/LoadPlugin exec/" /etc/collectd/collectd.conf
     sed -i "s/^#LoadPlugin tcpconns$/LoadPlugin tcpconns/" /etc/collectd/collectd.conf
-    echo "
-    <Plugin network>
-        Server \"$COLLECTD_IP\" \"$COLLECTD_PORT\"
-    </Plugin> " >> /etc/collectd/collectd.conf
 
-    echo "
-    <Plugin exec>
-        Exec \"daemon\" \"/opt/usageLicode.sh\"
-    </Plugin> " >> /etc/collectd/collectd.conf
+    if grep -q "Server \"$COLLECTD_IP\" \"$COLLECTD_PORT\"" /etc/collectd/collectd.conf
+    then
+        echo "Collectd network: Ya configurado"
+    else
+        echo "
+        <Plugin network>
+            Server \"$COLLECTD_IP\" \"$COLLECTD_PORT\"
+        </Plugin> " >> /etc/collectd/collectd.conf
+    fi
+
+    if grep -q "Exec \"daemon\" \"/opt/usageLicode.sh\"" /etc/collectd/collectd.conf
+    then
+        echo "Collectd exec: Ya configurado"
+    else
+        echo "
+        <Plugin exec>
+            Exec \"daemon\" \"/opt/usageLicode.sh\"
+        </Plugin> " >> /etc/collectd/collectd.conf
+    fi
 fi
 
 printenv|egrep  'HOST|PORT' > /etc/cron.d/schedules.tmp
