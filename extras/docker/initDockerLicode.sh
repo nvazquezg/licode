@@ -259,10 +259,17 @@ if ! [ -z "$PRIVATE_HOSTNAME" ]; then
     fi
 fi
 
+##  En cron, y collect no se ven las variables se se pasan por docker -> crearlas al comienzo de los scripts.
+
 printenv|egrep  'HOST|PORT' > /etc/cron.d/schedules.tmp
 # coge partir de la primera ocurrencia de minuto o root para no repetir variables tras varias ejecuciones.
 egrep 'minuto|root' -A 1000 /etc/cron.d/schedules >> /etc/cron.d/schedules.tmp
 mv /etc/cron.d/schedules.tmp /etc/cron.d/schedules
+
+printenv|egrep  'HOST|PORT' > /opt/portsUDP.sh.tmp
+# coge partir de la primera ocurrencia /proc no repetir variables tras varias ejecuciones.
+egrep '/proc' -A 1000 /opt/portsUDP.sh >> /opt/portsUDP.sh.tmp
+mv /opt/portsUDP.sh.tmp /opt/portsUDP.sh
 
 #start services
 service cron start

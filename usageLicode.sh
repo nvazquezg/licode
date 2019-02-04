@@ -47,7 +47,7 @@ do
         fi
 
         # Solo de usuarios, no cuenta la que hace el recorder
-        WEBSOCKET=$(expr $WEBSOCKET - $RECORDINGS)
+        WEBSOCKET=$(($WEBSOCKET - $RECORDINGS))
         echo "PUTVAL $HOSTNAME/exec-licode/gauge-WEBSOCKET_USED interval=$INTERVAL N:$WEBSOCKET" | tee -a /tmp/licodeMon.log
 
         PUBLISHERS=$((/bin/bash /opt/portsUDP.sh|grep publisher|wc -l )  2> /dev/null ) ;
@@ -57,10 +57,11 @@ do
         SUBSCRIBERS=$((/bin/bash /opt/portsUDP.sh|grep subscriber|wc -l ) 2> /dev/null ) ;
         #echo "PUTVAL $HOSTNAME/exec-licode/gauge-SUBSCRIBERS interval=$INTERVAL N:$SUBSCRIBERS" | tee -a /tmp/licodeMon.log
 
-        UDP_FAILED=$(expr $UDP - $PUBLISHERS - $SUBSCRIBERS)
+        UDP_FAILED=$(($UDP - ( $PUBLISHERS + $SUBSCRIBERS) ))
         echo "PUTVAL $HOSTNAME/exec-licode/gauge-UDP_FAILED interval=$INTERVAL N:$UDP_FAILED" | tee -a /tmp/licodeMon.log
 
-        UDP_USED=$(expr $UDP - $UDP_FAILED)
+        UDP_USED=$(($PUBLISHERS + $SUBSCRIBERS))
         echo "PUTVAL $HOSTNAME/exec-licode/gauge-UDP_USED interval=$INTERVAL N:$UDP_USED" | tee -a /tmp/licodeMon.log
+
 
 done
