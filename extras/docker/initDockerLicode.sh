@@ -93,10 +93,11 @@ run_mongo() {
   dbURL=`echo $dbURL| cut -d'"' -f 2`
   dbURL=`echo $dbURL| cut -d'"' -f 1`
 
-  echo [licode] Creating superservice in $dbURL
+  echo [licode] Checking superservice in $dbURL
 
   COUNT_KEYS=`mongo $dbURL --quiet  --eval "db.services.count()"`
   if [ "$COUNT_KEYS" -eq "0" ]; then
+    echo [licode] Creating superservice in $dbURL
     mongo $dbURL --eval "db.services.insert({name: 'superService', key: '$RANDOM', rooms: []})"
   fi
 
