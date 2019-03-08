@@ -157,8 +157,8 @@ var initRecording = function(room, stream, callback, callbackError) {
 
             remoteCall('POST', process.env.API + 'nsr/record/' + idSala + '/autoEvent', params,
                 function (res) {
-                    callback(id);
-                }, function (err){
+                    checkRecordingFile(id, callback, callbackError);
+                }, function (err) {
                     callbackError(err);
                 });
         }
@@ -204,8 +204,8 @@ var startRecording = function(stream, callback, callbackError) {
 
             remoteCall('POST', process.env.API + 'nsr/record/' + idSala + '/autoEvent', params,
                 function (res) {
-                    callback(id);
-                }, function (err){
+                    checkRecordingFile(id, callback, callbackError);
+                }, function (err) {
                     callbackError(err);
                 });
 
@@ -251,6 +251,28 @@ var remoteCall = function(method, url, body, callback, callbackError) {
            callbackError(false);
        }
     });
+};
+
+var checkRecordingFile = function (id, callback, callbackError) {
+    let retries = 1;
+    let checkFileInterval = setInterval( function () {
+        log.info('CHECK RECORDING EXISTS: ' + config.erizoController.recording_path + id + '.mkv');
+        fs.access(config.erizoController.recording_path + id + '.mkv', fs.constants.F_OK, function(err) {
+            if (err) {
+                log.info('RECORDING DOESNT EXIST YET: ' + config.erizoController.recording_path + id + '.mkv');
+                if (retries > 10) {
+                    log.error('FAILED TO START RECORDING STREAM: ' + config.erizoController.recording_path + id + '.mkv');
+                    clearInterval(checkFileInterval);
+                    callbackError(err);
+                }
+                retries++;
+            } else {
+                log.info('RECORDING EXISTS: ' + config.erizoController.recording_path + id + '.mkv');
+                clearInterval(checkFileInterval);
+                callback(id);
+            }
+        });
+    }, 2000);
 };
 
 app.post('/record/stop', function(req, res) {
