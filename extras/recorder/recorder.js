@@ -125,12 +125,12 @@ var initRecording = function(room, stream, callback, callbackError) {
     // log.info('INITRECORDING-ROOM', room);
     // log.info('INITRECORDING-STREAM', stream);
     if(streamsRecording[stream.getID()]) {
-        log.info('Already recording stream', stream.getID(), streamsRecording[stream.getID()]);
-        callback('Already recording stream');
+        log.info('Already recording stream on init: ' + stream.getID() + ' ' + streamsRecording[stream.getID()]);
+        callback('Already recording stream on init: ' + stream.getID() + ' ' + streamsRecording[stream.getID()]);
         return;
     } else if (!stream.hasAudio() && !stream.hasVideo() && !stream.hasScreen()) {
-        log.info('Stream has nothing to record');
-        callback('Stream has nothing to record');
+        log.info('Stream has nothing to record on init: ' + stream.getID());
+        callback('Stream has nothing to record on init: ' + stream.getID());
         return;
     }
 
@@ -172,12 +172,12 @@ var initRecording = function(room, stream, callback, callbackError) {
 var startRecording = function(stream, callback, callbackError) {
     //log.info('STARTRECORDING', stream);
     if(streamsRecording[stream.getID()]) {
-        log.info('Already recording stream', stream.getID(), streamsRecording[stream.getID()]);
-        callback('Already recording stream');
+        log.info('Already recording stream: ' + stream.getID() + ' ' + streamsRecording[stream.getID()]);
+        callback('Already recording stream: ' + stream.getID() + ' ' + streamsRecording[stream.getID()]);
         return;
     } else if (!stream.hasAudio() && !stream.hasVideo() && !stream.hasScreen()) {
-        log.info('Stream has nothing to record');
-        callback('Stream has nothing to record');
+        log.info('Stream has nothing to record: ' + stream.getID());
+        callback('Stream has nothing to record: ' + stream.getID());
         return;
     }
 
