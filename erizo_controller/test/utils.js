@@ -163,7 +163,7 @@ module.exports.reset = () => {
     setRemoteDescription: sinon.stub(),
     getLocalDescription: sinon.stub().returns(module.exports.ConnectionDescription),
     addRemoteCandidate: sinon.stub(),
-    addMediaStream: sinon.stub(),
+    addMediaStream: sinon.stub().returns(Promise.resolve()),
     removeMediaStream: sinon.stub(),
   };
 
@@ -208,7 +208,8 @@ module.exports.reset = () => {
     addEventListener: sinon.stub(),
     addExternalInput: sinon.stub(),
     addExternalOutput: sinon.stub(),
-    processSignaling: sinon.stub(),
+    processStreamMessageFromClient: sinon.stub(),
+    processConnectionMessageFromClient: sinon.stub(),
     addPublisher: sinon.stub(),
     addMultipleSubscribers: sinon.stub(),
     removeMultipleSubscribers: sinon.stub(),
