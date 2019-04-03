@@ -21,6 +21,11 @@ WORKDIR /opt
 RUN curl -sL https://deb.nodesource.com/setup_8.x | sudo -E bash -
 RUN sudo apt-get install -y nodejs
 RUN npm install pm2@latest -g
+RUN pm2 install pm2-logrotate
+RUN pm2 set pm2-logrotate:rotateInterval '0 0 * * *'
+RUN pm2 set pm2-logrotate:max_size 100M
+RUN pm2 set pm2-logrotate:retain 30
+
 
 COPY . /opt/licode
 
