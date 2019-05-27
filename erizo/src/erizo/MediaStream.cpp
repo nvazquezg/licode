@@ -91,7 +91,6 @@ MediaStream::MediaStream(std::shared_ptr<Worker> worker,
 
   rate_control_ = 0;
   sending_ = true;
-  ready_ = false;
 }
 
 MediaStream::~MediaStream() {
@@ -126,7 +125,6 @@ void MediaStream::syncClose() {
     return;
   }
   sending_ = false;
-  ready_ = false;
   video_sink_ = nullptr;
   audio_sink_ = nullptr;
   fb_sink_ = nullptr;
@@ -144,10 +142,7 @@ void MediaStream::close() {
   });
 }
 
-bool MediaStream::init(bool doNotWaitForRemoteSdp) {
-  if (doNotWaitForRemoteSdp) {
-    ready_ = true;
-  }
+bool MediaStream::init() {
   return true;
 }
 
@@ -160,37 +155,15 @@ bool MediaStream::isSinkSSRC(uint32_t ssrc) {
 }
 
 bool MediaStream::setRemoteSdp(std::shared_ptr<SdpInfo> sdp) {
-  ELOG_DEBUG("%s message: setting remote SDP to Stream, sending: %d, initialized: %d",
-    toLog(), sending_, pipeline_initialized_);
+  ELOG_DEBUG("%s message: setting remote SDP", toLog());
   if (!sending_) {
     return true;
   }
-
-  std::shared_ptr<SdpInfo> remote_sdp = std::make_shared<SdpInfo>(*sdp.get());
-  auto video_ssrc_list_it = remote_sdp->video_ssrc_map.find(getLabel());
-  auto audio_ssrc_it = remote_sdp->audio_ssrc_map.find(getLabel());
-
-  if (isPublisher() && !ready_) {
-    bool stream_found = false;
-
-    if (video_ssrc_list_it != remote_sdp->video_ssrc_map.end() ||
-        audio_ssrc_it != remote_sdp->audio_ssrc_map.end()) {
-      stream_found = true;
-    }
-
-    if (!stream_found) {
-      return true;
-    }
-  }
-
-  remote_sdp_ = remote_sdp;
-
+  remote_sdp_ =  std::make_shared<SdpInfo>(*sdp.get());
   if (remote_sdp_->videoBandwidth != 0) {
     ELOG_DEBUG("%s message: Setting remote BW, maxVideoBW: %u", toLog(), remote_sdp_->videoBandwidth);
     this->rtcp_processor_->setMaxVideoBW(remote_sdp_->videoBandwidth*1000);
   }
-
-  ready_ = true;
 
   if (pipeline_initialized_ && pipeline_) {
     pipeline_->notifyUpdate();
@@ -198,10 +171,12 @@ bool MediaStream::setRemoteSdp(std::shared_ptr<SdpInfo> sdp) {
   }
 
   bundle_ = remote_sdp_->isBundle;
+  auto video_ssrc_list_it = remote_sdp_->video_ssrc_map.find(getLabel());
   if (video_ssrc_list_it != remote_sdp_->video_ssrc_map.end()) {
     setVideoSourceSSRCList(video_ssrc_list_it->second);
   }
 
+  auto audio_ssrc_it = remote_sdp_->audio_ssrc_map.find(getLabel());
   if (audio_ssrc_it != remote_sdp_->audio_ssrc_map.end()) {
     setAudioSourceSSRC(audio_ssrc_it->second);
   }
@@ -228,8 +203,6 @@ bool MediaStream::setRemoteSdp(std::shared_ptr<SdpInfo> sdp) {
   initializePipeline();
 
   initializeStats();
-
-  notifyMediaStreamEvent("ready", "");
 
   return true;
 }
@@ -374,9 +347,6 @@ void MediaStream::printStats() {
 }
 
 void MediaStream::initializePipeline() {
-  if (pipeline_initialized_) {
-    return;
-  }
   handler_manager_ = std::make_shared<HandlerManager>(shared_from_this());
   pipeline_->addService(shared_from_this());
   pipeline_->addService(handler_manager_);
@@ -527,9 +497,11 @@ void MediaStream::read(std::shared_ptr<DataPacket> packet) {
       // Deliver data
       if (isVideoSourceSSRC(recvSSRC) && video_sink_) {
         parseIncomingPayloadType(buf, len, VIDEO_PACKET);
+        parseIncomingExtensionId(buf, len, VIDEO_PACKET);
         video_sink_->deliverVideoData(std::move(packet));
       } else if (isAudioSourceSSRC(recvSSRC) && audio_sink_) {
         parseIncomingPayloadType(buf, len, AUDIO_PACKET);
+        parseIncomingExtensionId(buf, len, AUDIO_PACKET);
         audio_sink_->deliverAudioData(std::move(packet));
       } else {
         ELOG_DEBUG("%s read video unknownSSRC: %u, localVideoSSRC: %u, localAudioSSRC: %u",
@@ -538,6 +510,7 @@ void MediaStream::read(std::shared_ptr<DataPacket> packet) {
     } else {
       if (packet->type == AUDIO_PACKET && audio_sink_) {
         parseIncomingPayloadType(buf, len, AUDIO_PACKET);
+        parseIncomingExtensionId(buf, len, AUDIO_PACKET);
         // Firefox does not send SSRC in SDP
         if (getAudioSourceSSRC() == 0) {
           ELOG_DEBUG("%s discoveredAudioSourceSSRC:%u", toLog(), recvSSRC);
@@ -546,6 +519,7 @@ void MediaStream::read(std::shared_ptr<DataPacket> packet) {
         audio_sink_->deliverAudioData(std::move(packet));
       } else if (packet->type == VIDEO_PACKET && video_sink_) {
         parseIncomingPayloadType(buf, len, VIDEO_PACKET);
+        parseIncomingExtensionId(buf, len, VIDEO_PACKET);
         // Firefox does not send SSRC in SDP
         if (getVideoSourceSSRC() == 0) {
           ELOG_DEBUG("%s discoveredVideoSourceSSRC:%u", toLog(), recvSSRC);
@@ -610,6 +584,7 @@ void MediaStream::sendPacketAsync(std::shared_ptr<DataPacket> packet) {
   }
 
   changeDeliverPayloadType(packet.get(), packet->type);
+  changeDeliverExtensionId(packet.get(), packet->type);
   worker_->task([stream_ptr, packet]{
     stream_ptr->sendPacket(packet);
   });
@@ -707,6 +682,54 @@ void MediaStream::getJSONStats(std::function<void(std::string)> callback) {
   });
 }
 
+void MediaStream::changeDeliverExtensionId(DataPacket *dp, packetType type) {
+  RtpHeader* h = reinterpret_cast<RtpHeader*>(dp->data);
+  RtcpHeader *chead = reinterpret_cast<RtcpHeader*>(dp->data);
+  if (!chead->isRtcp()) {
+    // Extension Id to external
+    if (h->getExtension()) {
+      std::array<RTPExtensions, 15> extMap;
+      RtpExtensionProcessor& ext_processor = getRtpExtensionProcessor();
+      switch (type) {
+        case VIDEO_PACKET:
+          extMap = ext_processor.getVideoExtensionMap();
+          break;
+        case AUDIO_PACKET:
+          extMap = ext_processor.getAudioExtensionMap();
+          break;
+        default:
+          ELOG_WARN("%s Won't process RTP extensions for unknown type packets", toLog());
+          return;
+          break;
+      }
+      uint16_t totalExtLength = h->getExtLength();
+      if (h->getExtId() == 0xBEDE) {  // One-Byte Header
+        char* extBuffer = (char*)&h->extensions;  // NOLINT
+        uint8_t extByte = 0;
+        uint16_t currentPlace = 1;
+        uint8_t extId = 0;
+        uint8_t extLength = 0;
+        while (currentPlace < (totalExtLength*4)) {
+          extByte = (uint8_t)(*extBuffer);
+          extId = extByte >> 4;
+          extLength = extByte & 0x0F;
+          // extId == 0 should never happen, see https://tools.ietf.org/html/rfc5285#section-4.2
+          if (extId != 0) {
+            for (int i = 1; i < 15; i++) {
+              if (extMap.at(i) == extId) {
+                extBuffer[0] = (extBuffer[0] | 0xF0) & (i << 4 | 0x0F);
+              }
+            }
+          }
+          extBuffer = extBuffer + extLength + 2;
+          currentPlace = currentPlace + extLength + 2;
+        }
+      } else {
+        ELOG_WARN("%s Two-Byte Header not handled!", toLog());
+      }
+    }
+  }
+}
 void MediaStream::changeDeliverPayloadType(DataPacket *dp, packetType type) {
   RtpHeader* h = reinterpret_cast<RtpHeader*>(dp->data);
   RtcpHeader *chead = reinterpret_cast<RtcpHeader*>(dp->data);
@@ -721,6 +744,50 @@ void MediaStream::changeDeliverPayloadType(DataPacket *dp, packetType type) {
       if (internalPT != externalPT) {
           h->setPayloadType(externalPT);
       }
+  }
+}
+
+void MediaStream::parseIncomingExtensionId(char *buf, int len, packetType type) {
+  RtcpHeader* chead = reinterpret_cast<RtcpHeader*>(buf);
+  RtpHeader* h = reinterpret_cast<RtpHeader*>(buf);
+  if (!chead->isRtcp()) {
+    // Extension Id to internal
+    if (h->getExtension()) {
+      std::array<RTPExtensions, 15> extMap;
+      RtpExtensionProcessor& ext_processor = getRtpExtensionProcessor();
+      switch (type) {
+        case VIDEO_PACKET:
+          extMap = ext_processor.getVideoExtensionMap();
+          break;
+        case AUDIO_PACKET:
+          extMap = ext_processor.getAudioExtensionMap();
+          break;
+        default:
+          ELOG_WARN("%s Won't process RTP extensions for unknown type packets", toLog());
+          return;
+          break;
+      }
+      uint16_t totalExtLength = h->getExtLength();
+      if (h->getExtId() == 0xBEDE) {  // One-Byte Header
+        char* extBuffer = (char*)&h->extensions;  // NOLINT
+        uint8_t extByte = 0;
+        uint16_t currentPlace = 1;
+        uint8_t extId = 0;
+        uint8_t extLength = 0;
+        while (currentPlace < (totalExtLength*4)) {
+          extByte = (uint8_t)(*extBuffer);
+          extId = extByte >> 4;
+          extLength = extByte & 0x0F;
+          if (extId != 0 && extMap[extId] != 0) {
+            extBuffer[0] = (extBuffer[0] | 0xF0) & (extMap[extId] << 4 | 0x0F);
+          }
+          extBuffer = extBuffer + extLength + 2;
+          currentPlace = currentPlace + extLength + 2;
+        }
+      } else {
+        ELOG_WARN("%s Two-Byte Header not handled!", toLog());
+      }
+    }
   }
 }
 
@@ -774,16 +841,13 @@ void MediaStream::notifyUpdateToHandlers() {
   });
 }
 
-boost::future<void> MediaStream::asyncTask(std::function<void(std::shared_ptr<MediaStream>)> f) {
-  auto task_promise = std::make_shared<boost::promise<void>>();
+void MediaStream::asyncTask(std::function<void(std::shared_ptr<MediaStream>)> f) {
   std::weak_ptr<MediaStream> weak_this = shared_from_this();
-  worker_->task([weak_this, f, task_promise] {
+  worker_->task([weak_this, f] {
     if (auto this_ptr = weak_this.lock()) {
       f(this_ptr);
     }
-    task_promise->set_value();
   });
-  return task_promise->get_future();
 }
 
 void MediaStream::sendPacket(std::shared_ptr<DataPacket> p) {
