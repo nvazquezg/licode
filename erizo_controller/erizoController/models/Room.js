@@ -7,12 +7,11 @@ const logger = require('./../../common/logger').logger;
 const log = logger.getLogger('ErizoController - Room');
 
 class Room extends events.EventEmitter {
-  constructor(erizoControllerId, amqper, ecch, id, p2p) {
+  constructor(amqper, ecch, id, p2p) {
     super();
     this.streams = new Map();
     this.clients = new Map();
     this.id = id;
-    this.erizoControllerId = erizoControllerId;
     this.p2p = p2p;
     this.amqper = amqper;
     this.ecch = ecch;
@@ -35,10 +34,6 @@ class Room extends events.EventEmitter {
     return this.streams.delete(id);
   }
 
-  hasClientWithId(id) {
-    return this.clients.has(id);
-  }
-
   getClientById(id) {
     return this.clients.get(id);
   }
@@ -57,6 +52,7 @@ class Room extends events.EventEmitter {
   }
 
   removeClient(id) {
+    this.controller.removeClient(id);
     return this.clients.delete(id);
   }
 
@@ -68,10 +64,7 @@ class Room extends events.EventEmitter {
   }
 
   setupRoomController() {
-    this.controller = controller.RoomController({
-      amqper: this.amqper,
-      ecch: this.ecch,
-      erizoControllerId: this.erizoControllerId });
+    this.controller = controller.RoomController({ amqper: this.amqper, ecch: this.ecch });
     this.controller.addEventListener(this.onRoomControllerEvent.bind(this));
   }
 
@@ -84,13 +77,6 @@ class Room extends events.EventEmitter {
                  `streamId: ${streamId}`);
       this.sendMessage('onRemoveStream', { id: streamId });
         // remove clients and streams?
-    }
-  }
-
-  sendConnectionMessageToClient(clientId, connectionId, info, evt) {
-    const client = this.getClientById(clientId);
-    if (client) {
-      client.sendMessage('connection_message_erizo', { connectionId, info, evt });
     }
   }
 
@@ -117,10 +103,10 @@ class Rooms extends events.EventEmitter {
     return this.rooms.size;
   }
 
-  getOrCreateRoom(erizoControllerId, id, p2p) {
+  getOrCreateRoom(id, p2p) {
     let room = this.rooms.get(id);
     if (room === undefined) {
-      room = new Room(erizoControllerId, this.amqper, this.ecch, id, p2p);
+      room = new Room(this.amqper, this.ecch, id, p2p);
       this.rooms.set(room.id, room);
       room.on('room-empty', this.deleteRoom.bind(this, id));
       this.emit('updated');
@@ -132,16 +118,6 @@ class Rooms extends events.EventEmitter {
     this.rooms.forEach((room) => {
       doSomething(room);
     });
-  }
-
-  getRoomWithClientId(id) {
-    // eslint-disable-next-line no-restricted-syntax
-    for (const room of this.rooms.values()) {
-      if (room.hasClientWithId(id)) {
-        return room;
-      }
-    }
-    return undefined;
   }
 
   getRoomById(id) {
