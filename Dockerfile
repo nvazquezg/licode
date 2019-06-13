@@ -10,7 +10,7 @@ RUN ln -fs /usr/share/zoneinfo/Europe/Madrid /etc/localtime && dpkg-reconfigure 
 
 COPY .nvmrc package.json /opt/licode/
 
-COPY scripts/installUbuntuDeps.sh scripts/checkNvm.sh /opt/licode/scripts/
+COPY scripts/installUbuntuDeps.sh scripts/checkNvm.sh scripts/libnice-014.patch0 /opt/licode/scripts/
 
 WORKDIR /opt/licode/scripts
 
