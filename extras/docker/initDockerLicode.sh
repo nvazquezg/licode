@@ -50,7 +50,7 @@ parse_arguments(){
         RECORDER=true
         ;;
         "--ackuaria")
-        RECORDER=true
+        ACKUARIA=true
         ;;
       esac
       shift
