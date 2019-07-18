@@ -21,6 +21,7 @@ parse_arguments(){
     ERIZODEBUG=false
     RECORDER=true
     ACKUARIA=true
+    METRICS=true
 
   else
     while [ "$1" != "" ]; do
@@ -51,6 +52,9 @@ parse_arguments(){
         ;;
         "--ackuaria")
         ACKUARIA=true
+        ;;
+        "--metrics")
+        METRICS=true
         ;;
       esac
       shift
@@ -174,6 +178,17 @@ run_ackuaria() {
   /usr/bin/pm2 start
 }
 
+run_metrics() {
+  echo "Starting ROV metrics"
+  cd $ROOT/erizo_controller/ROV
+#  if [ "$ERIZODEBUG" == "true" ]; then
+#    node inspector.js -d &
+#    node rovMetricsServer.js -d &
+#  else
+    /usr/bin/pm2 start
+#  fi
+}
+
 parse_arguments $*
 
 cd $ROOT/scripts
@@ -229,6 +244,10 @@ fi
 
 if [ "$ACKUARIA" == "true" ]; then
   run_ackuaria
+fi
+
+if [ "$METRICS" == "true" ]; then
+  run_metrics
 fi
 
 #Collectd configuration

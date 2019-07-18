@@ -106,7 +106,7 @@ class ErizoList extends EventEmitter {
         idle: erizo.idle,
         started: erizo.started,
         position: erizo.position,
-        processId: erizo.process.pid,
+        processId: (erizo.process !== undefined)? erizo.process.pid : -1  ,
       };
       erizoListDigest.push(erizoDigest);
     });
