@@ -71,14 +71,29 @@ const startBasicExample = () => {
   const onlySubscribe = getParameterByName('onlySubscribe');
   const onlyPublish = getParameterByName('onlyPublish');
   const autoSubscribe = getParameterByName('autoSubscribe');
+  const width = getParameterByName('width') || 640;
+  const height = getParameterByName('height') || 480 ;
+  const fps = getParameterByName('fps') || 15 ;
+
+  let constraints = {
+    width: {min: 160, ideal: +width +0 , max: 1920},
+    height: {min: 120, ideal: +height +0 , max: 1080},
+    frameRate: {max: +fps+0}
+  };
+  if (audioOnly){
+    constraints = false;
+  }
+
+//  videoSize: [+width - 10, +height - 10, +width + 10, +height + 10],
+
   console.log('Selected Room', roomName, 'of type', roomType);
   const config = { audio: true,
-    video: !audioOnly,
+    video: constraints,
     data: true,
     screen,
     attributes: {},
-    videoSize: [640, 480, 640, 480],
-    videoFrameRate: [10, 20] };
+    videoFrameRate: [+fps - 7, +fps + 7] };
+
   // If we want screen sharing we have to put our Chrome extension id.
   // The default one only works in our Lynckia test servers.
   // If we are not using chrome, the creation of the stream will fail regardless.
