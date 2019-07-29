@@ -53,10 +53,10 @@ Nan::Persistent<Function> MediaStream::constructor;
 MediaStream::MediaStream() : closed_{false}, id_{"undefined"} {
   async_stats_ = new uv_async_t;
   async_event_ = new uv_async_t;
-  future_async_ = new uv_async_t;
+  close_future_async_ = new uv_async_t;
   uv_async_init(uv_default_loop(), async_stats_, &MediaStream::statsCallback);
   uv_async_init(uv_default_loop(), async_event_, &MediaStream::eventCallback);
-  uv_async_init(uv_default_loop(), future_async_, &MediaStream::promiseResolver);
+  uv_async_init(uv_default_loop(), close_future_async_, &MediaStream::closePromiseResolver);
 }
 
 MediaStream::~MediaStream() {
@@ -65,6 +65,7 @@ MediaStream::~MediaStream() {
 }
 
 void MediaStream::closeEvents() {
+  boost::mutex::scoped_lock lock(mutex);
   has_stats_callback_ = false;
   has_event_callback_ = false;
   if (!uv_is_closing(reinterpret_cast<uv_handle_t*>(async_stats_))) {
@@ -77,11 +78,14 @@ void MediaStream::closeEvents() {
     uv_close(reinterpret_cast<uv_handle_t*>(async_event_), destroyAsyncHandle);
   }
   async_event_ = nullptr;
-  if (!uv_is_closing(reinterpret_cast<uv_handle_t*>(future_async_))) {
+}
+
+void MediaStream::closeFutureAsync() {
+  if (!uv_is_closing(reinterpret_cast<uv_handle_t*>(close_future_async_))) {
     ELOG_DEBUG("%s, message: Closing future handle", toLog());
-    uv_close(reinterpret_cast<uv_handle_t*>(future_async_), destroyAsyncHandle);
+    uv_close(reinterpret_cast<uv_handle_t*>(close_future_async_), destroyAsyncHandle);
   }
-  future_async_ = nullptr;
+  close_future_async_ = nullptr;
 }
 
 boost::future<void> MediaStream::close() {
@@ -188,14 +192,12 @@ NAN_METHOD(MediaStream::close) {
   MediaStream* obj = Nan::ObjectWrap::Unwrap<MediaStream>(info.Holder());
   v8::Local<v8::Promise::Resolver> resolver = v8::Promise::Resolver::New(info.GetIsolate());
   Nan::Persistent<v8::Promise::Resolver> *persistent = new Nan::Persistent<v8::Promise::Resolver>(resolver);
-  if (obj) {
-    obj->Ref();
-    obj->close().then(
+  obj->Ref();
+  obj->close().then(
       [persistent, obj] (boost::future<void>) {
-        ELOG_DEBUG("%s, Close is finishied, resolving promise", obj->toLog());
+        ELOG_DEBUG("%s, MediaStream Close is finishied, resolving promise", obj->toLog());
         obj->notifyFuture(persistent);
       });
-  }
   info.GetReturnValue().Set(resolver->GetPromise());
 }
 
@@ -433,27 +435,27 @@ NAN_METHOD(MediaStream::onMediaStreamEvent) {
 }
 
 void MediaStream::notifyStats(const std::string& message) {
-  if (!this->has_stats_callback_) {
+  boost::mutex::scoped_lock lock(mutex);
+  if (!has_stats_callback_) {
     return;
   }
   if (!async_stats_) {
     return;
   }
-  boost::mutex::scoped_lock lock(mutex);
-  this->stats_messages.push(message);
+  stats_messages.push(message);
   async_stats_->data = this;
   uv_async_send(async_stats_);
 }
 
 void MediaStream::notifyMediaStreamEvent(const std::string& type, const std::string& message) {
-  if (!this->has_event_callback_) {
+  boost::mutex::scoped_lock lock(mutex);
+  if (!has_event_callback_) {
     return;
   }
   if (!async_event_) {
     return;
   }
-  boost::mutex::scoped_lock lock(mutex);
-  this->event_messages.push(std::make_pair(type, message));
+  event_messages.push(std::make_pair(type, message));
   async_event_->data = this;
   uv_async_send(async_event_);
 }
@@ -498,23 +500,24 @@ NAUV_WORK_CB(MediaStream::eventCallback) {
 
 void MediaStream::notifyFuture(Nan::Persistent<v8::Promise::Resolver> *persistent) {
   boost::mutex::scoped_lock lock(mutex);
-  if (!future_async_) {
+  if (!close_future_async_) {
     return;
   }
   futures.push(persistent);
-  future_async_->data = this;
-  uv_async_send(future_async_);
+  close_future_async_->data = this;
+  uv_async_send(close_future_async_);
 }
 
-NAUV_WORK_CB(MediaStream::promiseResolver) {
+NAUV_WORK_CB(MediaStream::closePromiseResolver) {
   Nan::HandleScope scope;
   MediaStream* obj = reinterpret_cast<MediaStream*>(async->data);
-  if (!obj || !obj->me) {
+  if (!obj) {
     return;
   }
   boost::mutex::scoped_lock lock(obj->mutex);
-  ELOG_DEBUG("%s, message: promiseResolver", obj->toLog());
+  ELOG_DEBUG("%s, message: closePromiseResolver", obj->toLog());
   obj->futures_manager_.cleanResolvedFutures();
+  obj->Ref();
   while (!obj->futures.empty()) {
     auto persistent = obj->futures.front();
     v8::Local<v8::Promise::Resolver> resolver = Nan::New(*persistent);
@@ -522,5 +525,7 @@ NAUV_WORK_CB(MediaStream::promiseResolver) {
     obj->futures.pop();
     obj->Unref();
   }
-  ELOG_DEBUG("%s, message: promiseResolver finished", obj->toLog());
+  obj->closeFutureAsync();
+  obj->Unref();
+  ELOG_DEBUG("%s, message: closePromiseResolver finished", obj->toLog());
 }
