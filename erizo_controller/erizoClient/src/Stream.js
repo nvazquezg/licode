@@ -202,8 +202,8 @@ const Stream = (altConnectionHelpers, specInput) => {
             };
           });
         }, (error) => {
-          Logger.error(`Failed to get access to local media. Error code was ${
-                           error.code}.`);
+          Logger.error(`Failed to get access to local media. Error was ${
+                           error.name} with message ${error.message}.`);
           const streamEvent = StreamEvent({ type: 'access-denied', msg: error });
           that.dispatchEvent(streamEvent);
         });
@@ -464,6 +464,12 @@ const Stream = (altConnectionHelpers, specInput) => {
 
   that.enableHandlers = (handlers, publisherSide) => {
     controlHandler(handlers, publisherSide, true);
+  };
+
+  that.updateSimulcastLayersBitrate = (bitrates) => {
+    if (that.pc && that.local) {
+      that.pc.updateSimulcastLayersBitrate(bitrates);
+    }
   };
 
   that.updateConfiguration = (config, callback = () => {}) => {
