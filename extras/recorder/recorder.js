@@ -61,12 +61,17 @@ app.use(function(req, res, next) {
 N.API.init(config.nuve.superserviceID, config.nuve.superserviceKey, 'http://localhost:3000/');
 
 var onAddStream = function(event) {
-    //log.info('ADDSTREAM', event);
-    startRecording(event.stream, function(res){
-        log.info('ADD STREAM: ', event.stream.getID(), 'RECORDING:', res);
-    }, function (error) {
-        log.info('ADD STREAM ERROR: ', event.stream.getID(), 'ERROR:', error);
-    });
+    let idSala = getIDSala(event.stream.room.roomID);
+    if (event.stream.local) {
+        log.info('LOCAL STREAM: ', event.stream.getID());
+        sendStreamData(idSala, {type: 'Recorder', action: {idType: 1004, name: 'Recorder local stream OK'}, nickname: 'recorder-status'});
+    } else {
+        startRecording(event.stream, function (res) {
+            log.info('ADD STREAM: ', event.stream.getID(), 'RECORDING:', res);
+        }, function (error) {
+            log.info('ADD STREAM ERROR: ', event.stream.getID(), 'ERROR:', error);
+        });
+    }
 };
 
 var onRemoveStream = function(event) {
@@ -90,12 +95,14 @@ var onRemoveStream = function(event) {
                 "host": host
             })
         };
-    remoteCall('POST', process.env.API + 'nsr/record/' + streamsRecording[stream.getID()].roomKey + '/autoEvent', params,
+    remoteCall('POST', process.env.API + 'nsr/record/' + streamsRecording[stream.getID()].roomKey + '/autoEvent', params, streamsRecording[stream.getID()].roomKey,
         function (res) {
             log.info('REMOVED STREAM: ', stream.getID());
+            sendStreamData(streamsRecording[stream.getID()].roomKey, {type: 'Recorder', action: {idType: 1007, name: 'Removed stream OK', streamId: stream.getID()}, nickname: 'recorder-status'});
             delete streamsRecording[stream.getID()];
         }, function (err){
             log.info('ERROR REMOVING STREAM: ', stream.getID(), err);
+            sendStreamData(streamsRecording[stream.getID()].roomKey, {type: 'Recorder', action: {idType: 1005, name: 'Error removing stream', streamId: stream.getID()}, nickname: 'recorder-status'});
             delete streamsRecording[stream.getID()];
         });
 };
@@ -111,9 +118,7 @@ var onData = function(event) {
 var getIDSala = function(roomID) {
     let idSala = -1;
     Object.keys(roomsRecording).forEach(function(index) {
-        log.info('FILTERING', roomsRecording[index].roomID, roomID);
         if(roomsRecording[index].roomID === roomID){
-            log.info('ID_SALA', index);
             idSala = index;
             return index;
         };
@@ -155,9 +160,9 @@ var initRecording = function(room, stream, callback, callbackError) {
                     })
                 };
 
-            remoteCall('POST', process.env.API + 'nsr/record/' + idSala + '/autoEvent', params,
+            remoteCall('POST', process.env.API + 'nsr/record/' + idSala + '/autoEvent', params, idSala,
                 function (res) {
-                    checkRecordingFile(id, callback, callbackError);
+                    checkRecordingFile(id, stream.getID(), idSala, callback, callbackError);
                 }, function (err) {
                     callbackError(err);
                 });
@@ -202,9 +207,9 @@ var startRecording = function(stream, callback, callbackError) {
                     })
                 };
 
-            remoteCall('POST', process.env.API + 'nsr/record/' + idSala + '/autoEvent', params,
+            remoteCall('POST', process.env.API + 'nsr/record/' + idSala + '/autoEvent', params, idSala,
                 function (res) {
-                    checkRecordingFile(id, callback, callbackError);
+                    checkRecordingFile(id, stream.getID(), idSala, callback, callbackError);
                 }, function (err) {
                     callbackError(err);
                 });
@@ -225,14 +230,24 @@ var stopRecording = function(room, stream, callback, callbackError) {
     }
     //TODO: check if not recording?
     room.stopRecording(streamsRecording[stream.getID()].nameStream, function(id) {
+        sendStreamData(getIDSala(room.roomID),{type: 'Recorder', action: {idType: 1004, name: 'Recording stopped OK', msg: id}, nickname: 'recorder-status'});
         callback(id);
     }, function (err) {
         log.info('ERROR STOPPED STREAM: ', stream.getID(), 'ERROR:', err);
+        sendStreamData(getIDSala(room.roomID), {type: 'Recorder', action: {idType: 1005, name: 'Recording stopped Error', msg: err}, nickname: 'recorder-status'});
         callbackError(false);
     });
 };
 
-var remoteCall = function(method, url, body, callback, callbackError) {
+var sendStreamData = function(idSala, action) {
+    if (roomsRecording[idSala] && roomsRecording[idSala].myStream) {
+        roomsRecording[idSala].myStream.sendData(action);
+    } else if (idSala !== -1) {
+        log.error('UNABLE TO SEND STREAM DATA', idSala, action);
+    }
+};
+
+var remoteCall = function(method, url, body, idSala, callback, callbackError) {
     request({
         method: method,
         uri: url,
@@ -241,19 +256,22 @@ var remoteCall = function(method, url, body, callback, callbackError) {
     }, function (error, response, body) {
        if(error) {
            log.info('ERROR', error);
+           sendStreamData(idSala, {type: 'Recorder', action: {idType: 1005, name: 'Remote call Failed', msg: error}, nickname: 'recorder-status'});
            callbackError(false);
        }
        else if(response.statusCode === 200){
+           sendStreamData(idSala, {type: 'Recorder', action: {idType: 1004, name: 'Remote call OK', msg: body}, nickname: 'recorder-status'});
            callback(response.body);
        }
        else {
            log.info('BODY ERROR' , response.statusCode, body);
+           sendStreamData(idSala, {type: 'Recorder', action: {idType: 1005, name: 'Remote call body Error', msg: body}, nickname: 'recorder-status'});
            callbackError(false);
        }
     });
 };
 
-var checkRecordingFile = function (id, callback, callbackError) {
+var checkRecordingFile = function (id, streamId, idSala, callback, callbackError) {
     let retries = 1;
     let checkFileInterval = setInterval( function () {
         log.info('CHECK RECORDING EXISTS: ' + config.erizoController.recording_path + id + '.mkv');
@@ -263,16 +281,39 @@ var checkRecordingFile = function (id, callback, callbackError) {
                 if (retries > 10) {
                     log.error('FAILED TO START RECORDING STREAM: ' + config.erizoController.recording_path + id + '.mkv');
                     clearInterval(checkFileInterval);
+                    sendStreamData(idSala, {type: 'Recorder', action:
+                            {idType: 1005, name: 'Failed to start recording stream', msg: config.erizoController.recording_path + id + '.mkv', streamId: streamId}, nickname: 'recorder-status'});
                     callbackError(err);
                 }
                 retries++;
             } else {
                 log.info('RECORDING EXISTS: ' + config.erizoController.recording_path + id + '.mkv');
                 clearInterval(checkFileInterval);
+                sendStreamData(idSala, {type: 'Recorder', action:
+                        {idType: 1006, name: 'Start recording stream OK', msg: config.erizoController.recording_path + id + '.mkv', streamId: streamId}, nickname: 'recorder-status'});
                 callback(id);
             }
         });
     }, 2000);
+};
+
+var publish = function (idSala, room, callback, callbackError) {
+    roomsRecording[idSala].myStream = Erizo.Stream(nativeConnectionHelpers, {
+        audio: false,
+        video: false,
+        data: true,
+        attributes: {name: 'Recorder-data'}
+    });
+
+    roomsRecording[idSala].myStream.addEventListener('access-accepted', (event) => {
+        log.info('access-accepted');
+        room.publish(roomsRecording[idSala].myStream);
+    });
+    roomsRecording[idSala].myStream.addEventListener('access-denied', (event) => {
+        log.error('access-denied', roomsRecording[idSala].myStream);
+    });
+
+    roomsRecording[idSala].myStream.init();
 };
 
 app.post('/record/stop', function(req, res) {
@@ -311,6 +352,9 @@ app.post('/record/stop', function(req, res) {
 
     var disconnect = function(){
         setTimeout(function () {
+            sendStreamData(req.body.idSala, {type: 'Recorder', action: {idType: 1004, name: 'Disconnecting'}, nickname: 'recorder-status'});
+            roomsRecording[req.body.idSala].myStream.removeEventListener('access-accepted');
+            roomsRecording[req.body.idSala].myStream.removeEventListener('access-denied');
             log.info('DISCONNECT', room.roomID);
             room.disconnect();
             log.info('DELETE FROM GLOBAL LIST');
@@ -332,6 +376,7 @@ app.post('/record/stop', function(req, res) {
             }
             if (numStopped === room.remoteStreams.keys().length) {
                 log.info('ALL STOPPED', numStopped, room.remoteStreams.keys().length);
+                sendStreamData(req.body.idSala, {type: 'Recorder', action: {idType: 1004, name: 'All streams stopped'}, nickname: 'recorder-status'});
                 disconnect();
             }
             else {
@@ -340,6 +385,7 @@ app.post('/record/stop', function(req, res) {
 
         }, function (err) {
             log.info('ERROR STOPPING', value, err);
+            sendStreamData(req.body.idSala, {type: 'Recorder', action: {idType: 1005, name: 'Error stopping recordings'}, nickname: 'recorder-status'});
             res.status(500).send({result: 'Error stopping recordings', stream: value.getID()});
         });
     });
@@ -351,9 +397,11 @@ var createToken = function (roomId, idSala, final, error) {
         log.info('Token ready', token);
         connect(token, idSala, function(value) {
             log.info('Conection OK');
+            sendStreamData(idSala, {type: 'Recorder', action: {idType: 1004, name: 'Connection OK'}, nickname: 'recorder-status'});
             final({code: 200, result: 'OK', token: token, idSala: idSala, streams: value});
         }, function (err) {
             log.error('Error connecting to room for recording');
+            sendStreamData(idSala, {type: 'Recorder', action: {idType: 1004, name: 'Connection Error', msg: err}, nickname: 'recorder-status'});
             error({code: 500, result: 'Error connecting to room for recording', error: err});
         });
 
@@ -438,7 +486,7 @@ app.use(function(req, res, next) {
 var connect = function(token, idSala, callback, callbackError) {
     const b64 = JSON.parse(Buffer.from(token, 'base64'));
     host = b64.host;
-    console.log("HOST", host);
+    log.info("HOST", host);
 
     let room = Erizo.Room(newIo, nativeConnectionHelpers, nativeConnectionManager, { token });
 
@@ -449,6 +497,8 @@ var connect = function(token, idSala, callback, callbackError) {
         roomsRecording[idSala] = room;
         //log.info('CONNECTED', event);
         log.info('CONNECTED TO ROOM: ', room.roomID);
+
+        publish(idSala, room);
 
         let initiated = 0;
         if(event.streams.length === 0) {
@@ -503,16 +553,16 @@ var resumeRecording = function(sala){
 };
 
 var checkRecordingLength = function(idSala) {
-    remoteCall('GET', process.env.API + 'nsr/record/' + idSala + '/checkLength', {},
+    remoteCall('GET', process.env.API + 'nsr/record/' + idSala + '/checkLength', {}, idSala,
         function (res) {
-            console.log("Check length " + idSala, res);
+            log.info("Check length " + idSala, res);
         },
         function (err) {
-            console.error("Error checking length " + idSala, err);
+            log.error("Error checking length " + idSala, err);
         });
 };
 
-remoteCall('GET', process.env.API + 'nsr/record', {},
+remoteCall('GET', process.env.API + 'nsr/record', {}, -1,
     function (res) {
         log.info(res);
 
