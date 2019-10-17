@@ -450,7 +450,9 @@ app.post('/record/start', function(req, res) {
         res.status(result.code).send(result);
     }, function (err) {
         log.error("Falló el inicio de grabación");
-        res.status(err.code).send({result: err.result, error: err.error});
+        if (!res.headersSent) {
+            res.status(err.code).send({result: err.result, error: err.error});
+        }
     });
 });
 
