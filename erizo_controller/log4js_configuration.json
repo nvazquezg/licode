@@ -25,6 +25,11 @@
     "RovClient":"INFO",
     "RovMetricsServer":"INFO",
     "RovReplManager":"INFO",
-    "RPCPublic":"ERROR"
+    "RPCPublic":"ERROR",
+    "Node":"INFO",
+    "ErizoController - Channel":"DEBUG",
+    "ErizoController - Client":"INFO",
+    "ErizoController - Room":"INFO",
+    "NuveProxy":"INFO"
   }
 }
