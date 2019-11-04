@@ -202,7 +202,7 @@ class Source extends NodeClass {
   }
 
   maybeStopSlideShow() {
-    if (this.connection && this.mediaStream && this.mediaStream.periodicPlis !== undefined) {
+    if (this.connection && this.mediaStream) {
       let shouldStopSlideShow = true;
       this.forEachSubscriber((id, subscriber) => {
         if (subscriber.mediaStream.slideShowMode === true ||
@@ -216,8 +216,12 @@ class Source extends NodeClass {
       }
       log.debug('message: clearing Pli interval as no more ' +
                 'slideshows subscribers are present');
-      clearInterval(this.mediaStream.periodicPlis);
-      this.mediaStream.periodicPlis = undefined;
+      if (this.ei && this.mediaStream.periodicPlis) {
+        clearInterval(this.mediaStream.periodicPlis);
+        this.mediaStream.periodicPlis = undefined;
+      } else {
+        this.mediaStream.setPeriodicKeyframeRequests(false);
+      }
     }
   }
 
@@ -255,18 +259,24 @@ class Source extends NodeClass {
       period = period < MIN_SLIDESHOW_PERIOD ? MIN_SLIDESHOW_PERIOD : period;
       period = period > MAX_SLIDESHOW_PERIOD ? MAX_SLIDESHOW_PERIOD : period;
       Source._updateMediaStreamSubscriberSlideshow(subscriber, true, isFallback);
-      if (this.mediaStream.periodicPlis) {
-        clearInterval(this.mediaStream.periodicPlis);
-        this.mediaStream.periodicPlis = undefined;
+      if (this.ei) {
+        if (this.mediaStream.periodicPlis) {
+          clearInterval(this.mediaStream.periodicPlis);
+          this.mediaStream.periodicPlis = undefined;
+        }
+        this.mediaStream.periodicPlis = setInterval(() => {
+          this.ei.generatePLIPacket();
+        }, period);
+      } else {
+        this.mediaStream.setPeriodicKeyframeRequests(true, period);
       }
-      this.mediaStream.periodicPlis = setInterval(() => {
-        this.mediaStream.generatePLIPacket();
-      }, period);
     } else {
       const result = Source._updateMediaStreamSubscriberSlideshow(subscriber, false, isFallback);
       if (!result) {
         for (let pliIndex = 0; pliIndex < PLIS_TO_RECOVER; pliIndex += 1) {
-          this.mediaStream.generatePLIPacket();
+          if (this.ei) {
+            this.ei.generatePLIPacket();
+          }
         }
       }
       this.maybeStopSlideShow();
@@ -413,11 +423,11 @@ class Publisher extends Source {
 }
 
 class ExternalInput extends Source {
-  constructor(url, streamId, threadPool) {
+  constructor(url, streamId, label, threadPool) {
     super(url, streamId, threadPool);
     const eiId = `${streamId}_${url}`;
 
-    log.info(`message: Adding ExternalInput, id: ${eiId}`);
+    log.warn(`message: Adding ExternalInput, id: ${eiId}, url: ${url}`);
 
     const ei = new addon.ExternalInput(url);
 
@@ -428,6 +438,7 @@ class ExternalInput extends Source {
     this.externalOutputs = {};
     this.mediaStream = {};
     this.connection = ei;
+    this.label = label;
 
     ei.setAudioReceiver(this.muxer);
     ei.setVideoReceiver(this.muxer);

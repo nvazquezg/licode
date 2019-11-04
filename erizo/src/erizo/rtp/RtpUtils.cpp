@@ -67,7 +67,8 @@ bool RtpUtils::isFIR(std::shared_ptr<DataPacket> packet) {
   return is_fir;
 }
 
-std::shared_ptr<DataPacket> RtpUtils::createPLI(uint32_t source_ssrc, uint32_t sink_ssrc) {
+std::shared_ptr<DataPacket> RtpUtils::createPLI(uint32_t source_ssrc, uint32_t sink_ssrc,
+    packetPriority priority) {
   RtcpHeader pli;
   pli.setPacketType(RTCP_PS_Feedback_PT);
   pli.setBlockCount(RTCP_PLI_FMT);
@@ -76,7 +77,9 @@ std::shared_ptr<DataPacket> RtpUtils::createPLI(uint32_t source_ssrc, uint32_t s
   pli.setLength(2);
   char *buf = reinterpret_cast<char*>(&pli);
   int len = (pli.getLength() + 1) * 4;
-  return std::make_shared<DataPacket>(0, buf, len, VIDEO_PACKET);
+  auto packet = std::make_shared<DataPacket>(0, buf, len, VIDEO_PACKET);
+  packet->priority = priority;
+  return packet;
 }
 
 std::shared_ptr<DataPacket> RtpUtils::createFIR(uint32_t source_ssrc, uint32_t sink_ssrc, uint8_t seq_number) {
@@ -113,6 +116,19 @@ std::shared_ptr<DataPacket> RtpUtils::createREMB(uint32_t ssrc, std::vector<uint
   return std::make_shared<erizo::DataPacket>(0, buf, len, erizo::OTHER_PACKET);
 }
 
+std::shared_ptr<DataPacket> RtpUtils::createReceiverReport(uint32_t ssrc, uint8_t fraction_lost) {
+  erizo::RtcpHeader rr;
+  rr.setPacketType(RTCP_Receiver_PT);
+  rr.setBlockCount(1);
+
+  rr.setSSRC(0);
+  rr.setSourceSSRC(ssrc);
+  rr.setLength(8);
+  rr.setFractionLost(fraction_lost);
+  int len = (rr.getLength() + 1) * 4;
+  char *buf = reinterpret_cast<char*>(&rr);
+  return std::make_shared<erizo::DataPacket>(0, buf, len, erizo::OTHER_PACKET);
+}
 
 int RtpUtils::getPaddingLength(std::shared_ptr<DataPacket> packet) {
   RtpHeader *rtp_header = reinterpret_cast<RtpHeader*>(packet->data);
@@ -156,7 +172,9 @@ std::shared_ptr<DataPacket> RtpUtils::makePaddingPacket(std::shared_ptr<DataPack
   new_header->setMarker(false);
   packet_buffer[packet_length - 1] = padding_size;
 
-  return std::make_shared<DataPacket>(packet->comp, packet_buffer, packet_length, packet->type);
+  auto padding_packet = std::make_shared<DataPacket>(packet->comp, packet_buffer, packet_length, packet->type);
+  padding_packet->is_padding = true;
+  return padding_packet;
 }
 
 std::shared_ptr<DataPacket> RtpUtils::makeVP8BlackKeyframePacket(std::shared_ptr<DataPacket> packet) {

@@ -200,9 +200,18 @@ app.use((req, res, next) => {
 cleanExampleRooms(() => {
   getOrCreateRoom(defaultRoomName, undefined, undefined, (roomId) => {
     defaultRoom = roomId;
-    app.listen(3001);
+    let port = 3001;
+    let tlsPort = 3004;
+    if (config.basicExample && config.basicExample.port) {
+      port = config.basicExample.port;
+    }
+    if (config.basicExample && config.basicExample.tlsPort) {
+      tlsPort = config.basicExample.tlsPort;
+    }
+
+    app.listen(port);
     const server = https.createServer(options, app);
     console.log('BasicExample started');
-    server.listen(3004);
+    server.listen(tlsPort);
   });
 });

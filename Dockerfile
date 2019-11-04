@@ -4,6 +4,8 @@ MAINTAINER Lynckia
 
 WORKDIR /opt
 
+ARG COMMIT
+
 # Download latest version of the code and install dependencies
 RUN  apt-get update && apt-get install -y git wget curl tzdata collectd vim net-tools lsof sudo
 RUN ln -fs /usr/share/zoneinfo/Europe/Madrid /etc/localtime && dpkg-reconfigure -f noninteractive tzdata
@@ -60,6 +62,12 @@ RUN chmod 0755 /opt/usageLicode.sh
 RUN echo 'ALL  ALL=(ALL) NOPASSWD:/usr/bin/lsof' >> /etc/sudoers
 RUN echo 'ALL  ALL=(ALL) NOPASSWD:/bin/netstat' >> /etc/sudoers
 RUN echo 'ALL  ALL=(ALL) NOPASSWD:/bin/cat' >> /etc/sudoers
+
+WORKDIR /opt/licode
+
+RUN echo $COMMIT > RELEASE
+RUN date --rfc-3339='seconds' >> RELEASE
+RUN cat RELEASE
 
 WORKDIR /opt
 
