@@ -9,6 +9,10 @@ NVM_CHECK="$ROOT"/scripts/checkNvm.sh
 SERVID=""
 SERVKEY=""
 
+# initialize pm2
+/usr/bin/pm2 status
+sleep 5
+
 parse_arguments(){
   if [ -z "$1" ]; then
     echo "No parameters -- starting everything"
