@@ -27,6 +27,33 @@ Nan::Persistent<Function> WebRtcConnection::constructor;
 
 DEFINE_LOGGER(WebRtcConnection, "ErizoAPI.WebRtcConnection");
 
+ConnectionStatCallWorker::ConnectionStatCallWorker(
+  Nan::Callback *callback, std::weak_ptr<erizo::WebRtcConnection> weak_connection)
+    : Nan::AsyncWorker{callback}, weak_connection_{weak_connection}, stat_{""} {
+}
+
+void ConnectionStatCallWorker::Execute() {
+  std::promise<std::string> stat_promise;
+  std::future<std::string> stat_future = stat_promise.get_future();
+  if (auto connection = weak_connection_.lock()) {
+    connection->getJSONStats([&stat_promise] (std::string stats) {
+      stat_promise.set_value(stats);
+    });
+  } else {
+    stat_promise.set_value(std::string("{}"));
+  }
+  stat_future.wait();
+  stat_ = stat_future.get();
+}
+
+void ConnectionStatCallWorker::HandleOKCallback() {
+  Local<Value> argv[] = {
+    Nan::New<v8::String>(stat_).ToLocalChecked()
+  };
+  Nan::AsyncResource resource("erizo::addon.statCall");
+  callback->Call(1, argv, &resource);
+}
+
 void destroyWebRtcConnectionAsyncHandle(uv_handle_t *handle) {
   delete handle;
 }
@@ -92,11 +119,13 @@ NAN_MODULE_INIT(WebRtcConnection::Init) {
   Nan::SetPrototypeMethod(tpl, "addRemoteCandidate", addRemoteCandidate);
   Nan::SetPrototypeMethod(tpl, "getLocalSdp", getLocalSdp);
   Nan::SetPrototypeMethod(tpl, "getCurrentState", getCurrentState);
+  Nan::SetPrototypeMethod(tpl, "getConnectionQualityLevel", getConnectionQualityLevel);
   Nan::SetPrototypeMethod(tpl, "createOffer", createOffer);
   Nan::SetPrototypeMethod(tpl, "setMetadata", setMetadata);
   Nan::SetPrototypeMethod(tpl, "addMediaStream", addMediaStream);
   Nan::SetPrototypeMethod(tpl, "removeMediaStream", removeMediaStream);
   Nan::SetPrototypeMethod(tpl, "copySdpToLocalDescription", copySdpToLocalDescription);
+  Nan::SetPrototypeMethod(tpl, "getStats", getStats);
 
   constructor.Reset(tpl->GetFunction());
   Nan::Set(target, Nan::New("WebRtcConnection").ToLocalChecked(), Nan::GetFunction(tpl).ToLocalChecked());
@@ -122,6 +151,7 @@ NAN_METHOD(WebRtcConnection::New) {
     bool trickle = (info[7]->ToBoolean())->BooleanValue();
     v8::String::Utf8Value json_param(Nan::To<v8::String>(info[8]).ToLocalChecked());
     bool use_nicer = (info[9]->ToBoolean())->BooleanValue();
+    bool enable_connection_quality_check = (info[10]->ToBoolean())->BooleanValue();
     std::string media_config_string = std::string(*json_param);
     json media_config = json::parse(media_config_string);
     std::vector<erizo::RtpMap> rtp_mappings;
@@ -189,15 +219,15 @@ NAN_METHOD(WebRtcConnection::New) {
     }
 
     erizo::IceConfig iceConfig;
-    if (info.Length() == 15) {
-      v8::String::Utf8Value param2(Nan::To<v8::String>(info[10]).ToLocalChecked());
+    if (info.Length() == 16) {
+      v8::String::Utf8Value param2(Nan::To<v8::String>(info[11]).ToLocalChecked());
       std::string turnServer = std::string(*param2);
-      int turnPort = info[11]->IntegerValue();
-      v8::String::Utf8Value param3(Nan::To<v8::String>(info[12]).ToLocalChecked());
+      int turnPort = info[12]->IntegerValue();
+      v8::String::Utf8Value param3(Nan::To<v8::String>(info[13]).ToLocalChecked());
       std::string turnUsername = std::string(*param3);
-      v8::String::Utf8Value param4(Nan::To<v8::String>(info[13]).ToLocalChecked());
+      v8::String::Utf8Value param4(Nan::To<v8::String>(info[14]).ToLocalChecked());
       std::string turnPass = std::string(*param4);
-      v8::String::Utf8Value param5(Nan::To<v8::String>(info[14]).ToLocalChecked());
+      v8::String::Utf8Value param5(Nan::To<v8::String>(info[15]).ToLocalChecked());
       std::string network_interface = std::string(*param5);
 
       iceConfig.turn_server = turnServer;
@@ -221,7 +251,8 @@ NAN_METHOD(WebRtcConnection::New) {
     WebRtcConnection* obj = new WebRtcConnection();
     obj->id_ = wrtcId;
     obj->me = std::make_shared<erizo::WebRtcConnection>(worker, io_worker, wrtcId, iceConfig,
-                                                        rtp_mappings, ext_mappings, obj);
+                                                        rtp_mappings, ext_mappings, enable_connection_quality_check,
+                                                        obj);
     obj->Wrap(info.This());
     info.GetReturnValue().Set(info.This());
   } else {
@@ -427,6 +458,18 @@ NAN_METHOD(WebRtcConnection::getCurrentState) {
   info.GetReturnValue().Set(Nan::New(state));
 }
 
+NAN_METHOD(WebRtcConnection::getConnectionQualityLevel) {
+  WebRtcConnection* obj = Nan::ObjectWrap::Unwrap<WebRtcConnection>(info.Holder());
+  std::shared_ptr<erizo::WebRtcConnection> me = obj->me;
+  if (!me) {
+    return;
+  }
+
+  int level = me->getConnectionQualityLevel();
+
+  info.GetReturnValue().Set(Nan::New(level));
+}
+
 NAN_METHOD(WebRtcConnection::addMediaStream) {
   WebRtcConnection* obj = Nan::ObjectWrap::Unwrap<WebRtcConnection>(info.Holder());
   std::shared_ptr<erizo::WebRtcConnection> me = obj->me;
@@ -467,6 +510,20 @@ NAN_METHOD(WebRtcConnection::removeMediaStream) {
     });
 
   info.GetReturnValue().Set(resolver->GetPromise());
+}
+
+NAN_METHOD(WebRtcConnection::getStats) {
+  WebRtcConnection* obj = Nan::ObjectWrap::Unwrap<WebRtcConnection>(info.Holder());
+  std::shared_ptr<erizo::WebRtcConnection> me = obj->me;
+  Nan::Callback *callback = new Nan::Callback(info[0].As<Function>());
+  if (!me || info.Length() != 1 || obj->closed_) {
+    Local<Value> argv[] = {
+      Nan::New<v8::String>("{}").ToLocalChecked()
+    };
+    Nan::Call(*callback, 1, argv);
+    return;
+  }
+  AsyncQueueWorker(new ConnectionStatCallWorker(callback, obj->me));
 }
 
 // Async methods

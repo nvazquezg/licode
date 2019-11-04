@@ -54,9 +54,16 @@ exports.ErizoJSController = (erizoJSId, threadPool, ioThreadPool) => {
     }
   };
 
+  const initMetrics = () => {
+    that.metrics = {
+      connectionsFailed: 0,
+    };
+  };
+
 
   that.publishers = publishers;
   that.ioThreadPool = io;
+  initMetrics();
 
   const forEachPublisher = (action) => {
     const publisherStreamIds = Object.keys(publishers);
@@ -81,6 +88,10 @@ exports.ErizoJSController = (erizoJSId, threadPool, ioThreadPool) => {
       connectionId, connectionEvent, newStatus) => {
     const rpcID = `erizoController_${erizoControllerId}`;
     amqper.callRpc(rpcID, 'connectionStatusEvent', [clientId, connectionId, newStatus, connectionEvent]);
+
+    if (connectionEvent.type === 'failed') {
+      that.metrics.connectionsFailed += 1;
+    }
   };
 
   const getOrCreateClient = (erizoControllerId, clientId, singlePC = false) => {
@@ -140,11 +151,11 @@ exports.ErizoJSController = (erizoJSId, threadPool, ioThreadPool) => {
     replManager.processRpcMessage(args, callback);
   };
 
-  that.addExternalInput = (erizoControllerId, streamId, url, callbackRpc) => {
+  that.addExternalInput = (erizoControllerId, streamId, url, label, callbackRpc) => {
     updateUptimeInfo();
     if (publishers[streamId] === undefined) {
       const client = getOrCreateClient(erizoControllerId, url);
-      publishers[streamId] = new ExternalInput(url, streamId, threadPool);
+      publishers[streamId] = new ExternalInput(url, streamId, label, threadPool);
       const ei = publishers[streamId];
       const answer = ei.init();
       // We add the connection manually to the client
@@ -629,6 +640,36 @@ exports.ErizoJSController = (erizoJSId, threadPool, ioThreadPool) => {
     } else {
       log.debug(`message: stream not found - ignoring message, streamId: ${streamId}`);
     }
+  };
+
+  that.getAndResetMetrics = () => {
+    const metrics = Object.assign({}, that.metrics);
+    metrics.totalConnections = 0;
+    metrics.connectionLevels = Array(10).fill(0);
+    metrics.publishers = Object.keys(that.publishers).length;
+    let subscribers = 0;
+    Object.keys(that.publishers).forEach((streamId) => {
+      const publisher = that.publishers[streamId];
+      subscribers += publisher.numSubscribers;
+    });
+    metrics.subscribers = subscribers;
+
+    metrics.durationDistribution = threadPool.getDurationDistribution();
+    threadPool.resetStats();
+
+    clients.forEach((client) => {
+      const connections = client.getConnections();
+      metrics.totalConnections += connections.length;
+
+      connections.forEach((connection) => {
+        const level = connection.qualityLevel;
+        if (level >= 0 && level < metrics.connectionLevels.length) {
+          metrics.connectionLevels[level] += 1;
+        }
+      });
+    });
+    initMetrics();
+    return metrics;
   };
 
   return that;

@@ -101,7 +101,7 @@ const startBasicExample = () => {
     req.send(JSON.stringify(roomData));
   };
 
-  const roomData = { username: 'user',
+  const roomData = { username: `user ${parseInt(Math.random() * 100, 10)}`,
     role: 'presenter',
     room: roomName,
     type: roomType,
@@ -139,6 +139,9 @@ const startBasicExample = () => {
       if (!onlySubscribe) {
         room.publish(localStream, options);
       }
+      room.addEventListener('quality-level', (qualityEvt) => {
+        console.log(`New Quality Event, connection quality: ${qualityEvt.message}`);
+      });
       if (autoSubscribe) {
         room.autoSubscribe({ '/attributes/type': 'publisher' }, {}, { audio: true, video: true, data: false }, () => {});
       }

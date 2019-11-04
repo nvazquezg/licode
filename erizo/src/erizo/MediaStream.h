@@ -87,6 +87,7 @@ class MediaStream: public MediaSink, public MediaSource, public FeedbackSink,
   void sendPLIToFeedback();
   void setQualityLayer(int spatial_layer, int temporal_layer);
   void enableSlideShowBelowSpatialLayer(bool enabled, int spatial_layer);
+  void setPeriodicKeyframeRequests(bool activate, uint32_t interval_in_ms = 0);
 
   WebRTCEvent getCurrentState();
 
@@ -142,6 +143,9 @@ class MediaStream: public MediaSink, public MediaSource, public FeedbackSink,
 
   virtual bool isSlideShowModeEnabled() { return slide_show_mode_; }
 
+  virtual bool isRequestingPeriodicKeyframes() { return periodic_keyframes_requested_; }
+  virtual uint32_t getPeriodicKeyframesRequesInterval() { return periodic_keyframe_interval_; }
+
   virtual bool isSimulcast() { return simulcast_; }
   void setSimulcast(bool simulcast) { simulcast_ = simulcast; }
 
@@ -155,6 +159,12 @@ class MediaStream: public MediaSink, public MediaSource, public FeedbackSink,
   bool isSinkSSRC(uint32_t ssrc);
   void parseIncomingPayloadType(char *buf, int len, packetType type);
   void parseIncomingExtensionId(char *buf, int len, packetType type);
+  virtual void setTargetPaddingBitrate(uint64_t bitrate);
+  virtual uint64_t getTargetPaddingBitrate() {
+    return target_padding_bitrate_;
+  }
+
+  virtual uint32_t getTargetVideoBitrate();
 
   bool isPipelineInitialized() { return pipeline_initialized_; }
   bool isRunning() { return pipeline_initialized_ && sending_; }
@@ -223,6 +233,10 @@ class MediaStream: public MediaSink, public MediaSource, public FeedbackSink,
   std::atomic<uint32_t> video_bitrate_;
   std::random_device random_device_;
   std::mt19937 random_generator_;
+  uint64_t target_padding_bitrate_;
+  bool periodic_keyframes_requested_;
+  uint32_t periodic_keyframe_interval_;
+
  protected:
   std::shared_ptr<SdpInfo> remote_sdp_;
 };

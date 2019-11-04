@@ -30,11 +30,12 @@
 #include "rtp/FakeKeyframeGeneratorHandler.h"
 #include "rtp/StatsHandler.h"
 #include "rtp/SRPacketHandler.h"
-#include "rtp/SenderBandwidthEstimationHandler.h"
 #include "rtp/LayerDetectorHandler.h"
 #include "rtp/LayerBitrateCalculationHandler.h"
 #include "rtp/QualityFilterHandler.h"
 #include "rtp/QualityManager.h"
+#include "rtp/PeriodicPliHandler.h"
+#include "rtp/PliPriorityHandler.h"
 #include "rtp/PliPacerHandler.h"
 #include "rtp/RtpPaddingGeneratorHandler.h"
 #include "rtp/RtpUtils.h"
@@ -44,7 +45,8 @@ namespace erizo {
 DEFINE_LOGGER(MediaStream, "MediaStream");
 log4cxx::LoggerPtr MediaStream::statsLogger = log4cxx::Logger::getLogger("StreamStats");
 
-static constexpr auto kStreamStatsPeriod = std::chrono::seconds(30);
+static constexpr auto kStreamStatsPeriod = std::chrono::seconds(120);
+static constexpr uint64_t kInitialBitrate = 300000;
 
 MediaStream::MediaStream(std::shared_ptr<Worker> worker,
   std::shared_ptr<WebRtcConnection> connection,
@@ -65,7 +67,10 @@ MediaStream::MediaStream(std::shared_ptr<Worker> worker,
     simulcast_{false},
     bitrate_from_max_quality_layer_{0},
     video_bitrate_{0},
-    random_generator_{random_device_()} {
+    random_generator_{random_device_()},
+    target_padding_bitrate_{0},
+    periodic_keyframes_requested_{false},
+    periodic_keyframe_interval_{0} {
   if (is_publisher) {
     setVideoSinkSSRC(kDefaultVideoSinkSSRC);
     setAudioSinkSSRC(kDefaultAudioSinkSSRC);
@@ -397,19 +402,24 @@ void MediaStream::initializePipeline() {
   pipeline_->addFront(std::make_shared<RtpTrackMuteHandler>());
   pipeline_->addFront(std::make_shared<RtpSlideShowHandler>());
   pipeline_->addFront(std::make_shared<RtpPaddingGeneratorHandler>());
+  pipeline_->addFront(std::make_shared<PeriodicPliHandler>());
+  pipeline_->addFront(std::make_shared<PliPriorityHandler>());
   pipeline_->addFront(std::make_shared<PliPacerHandler>());
-  pipeline_->addFront(std::make_shared<BandwidthEstimationHandler>());
   pipeline_->addFront(std::make_shared<RtpPaddingRemovalHandler>());
+  pipeline_->addFront(std::make_shared<BandwidthEstimationHandler>());
   pipeline_->addFront(std::make_shared<RtcpFeedbackGenerationHandler>());
   pipeline_->addFront(std::make_shared<RtpRetransmissionHandler>());
   pipeline_->addFront(std::make_shared<SRPacketHandler>());
-  pipeline_->addFront(std::make_shared<SenderBandwidthEstimationHandler>());
   pipeline_->addFront(std::make_shared<LayerDetectorHandler>());
   pipeline_->addFront(std::make_shared<OutgoingStatsHandler>());
   pipeline_->addFront(std::make_shared<PacketCodecParser>());
 
   pipeline_->addFront(std::make_shared<PacketWriter>(this));
   pipeline_->finalize();
+
+  if (connection_) {
+    quality_manager_->setConnectionQualityLevel(connection_->getConnectionQualityLevel());
+  }
   pipeline_initialized_ = true;
 }
 
@@ -598,6 +608,13 @@ void MediaStream::sendPLIToFeedback() {
       this->getVideoSourceSSRC()));
   }
 }
+
+void MediaStream::setPeriodicKeyframeRequests(bool activate, uint32_t interval) {
+  ELOG_DEBUG("%s message: settingPeriodicKeyframes, activate: %u, interval, %u", activate, interval);
+  periodic_keyframes_requested_ = activate;
+  periodic_keyframe_interval_ = interval;
+  notifyUpdateToHandlers();
+}
 // changes the outgoing payload type for in the given data packet
 void MediaStream::sendPacketAsync(std::shared_ptr<DataPacket> packet) {
   if (!sending_) {
@@ -633,6 +650,31 @@ void MediaStream::setSlideShowMode(bool state) {
   });
   slide_show_mode_ = state;
   notifyUpdateToHandlers();
+}
+
+void MediaStream::setTargetPaddingBitrate(uint64_t target_padding_bitrate) {
+  target_padding_bitrate_ = target_padding_bitrate;
+  notifyUpdateToHandlers();
+}
+
+uint32_t MediaStream::getTargetVideoBitrate() {
+  bool slide_show_mode = isSlideShowModeEnabled();
+  bool is_simulcast = isSimulcast();
+  uint32_t bitrate_sent = getVideoBitrate();
+  uint32_t max_bitrate = getMaxVideoBW();
+  uint32_t bitrate_from_max_quality_layer = getBitrateFromMaxQualityLayer();
+
+  uint32_t target_bitrate = max_bitrate;
+  if (is_simulcast) {
+    target_bitrate = std::min(bitrate_from_max_quality_layer, max_bitrate);
+  }
+  if (slide_show_mode || !is_simulcast) {
+    target_bitrate = std::min(bitrate_sent, max_bitrate);
+  }
+  if (target_bitrate == 0) {
+    target_bitrate = kInitialBitrate;
+  }
+  return target_bitrate;
 }
 
 void MediaStream::muteStream(bool mute_video, bool mute_audio) {
@@ -844,7 +886,7 @@ void MediaStream::parseIncomingPayloadType(char *buf, int len, packetType type) 
 
 void MediaStream::write(std::shared_ptr<DataPacket> packet) {
   if (connection_) {
-    connection_->write(packet);
+    connection_->send(packet);
   }
 }
 

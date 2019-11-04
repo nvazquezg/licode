@@ -35,6 +35,7 @@
 #include "rtp/QualityManager.h"
 #include "rtp/PliPacerHandler.h"
 #include "rtp/RtpPaddingGeneratorHandler.h"
+#include "rtp/RtpPaddingManagerHandler.h"
 #include "rtp/RtpUtils.h"
 
 namespace erizo {
@@ -42,14 +43,16 @@ DEFINE_LOGGER(WebRtcConnection, "WebRtcConnection");
 
 WebRtcConnection::WebRtcConnection(std::shared_ptr<Worker> worker, std::shared_ptr<IOWorker> io_worker,
     const std::string& connection_id, const IceConfig& ice_config, const std::vector<RtpMap> rtp_mappings,
-    const std::vector<erizo::ExtMap> ext_mappings, WebRtcConnectionEventListener* listener) :
+    const std::vector<erizo::ExtMap> ext_mappings, bool enable_connection_quality_check,
+    WebRtcConnectionEventListener* listener) :
     connection_id_{connection_id},
     audio_enabled_{false}, video_enabled_{false}, bundle_{false}, conn_event_listener_{listener},
     ice_config_{ice_config}, rtp_mappings_{rtp_mappings}, extension_processor_{ext_mappings},
     worker_{worker}, io_worker_{io_worker},
     remote_sdp_{std::make_shared<SdpInfo>(rtp_mappings)}, local_sdp_{std::make_shared<SdpInfo>(rtp_mappings)},
-    audio_muted_{false}, video_muted_{false}, first_remote_sdp_processed_{false}
-    {
+    audio_muted_{false}, video_muted_{false}, first_remote_sdp_processed_{false},
+    enable_connection_quality_check_{enable_connection_quality_check}, pipeline_{Pipeline::create()},
+    pipeline_initialized_{false} {
   ELOG_INFO("%s message: constructor, stunserver: %s, stunPort: %d, minPort: %d, maxPort: %d",
       toLog(), ice_config.stun_server.c_str(), ice_config.stun_port, ice_config.min_port, ice_config.max_port);
   stats_ = std::make_shared<Stats>();
@@ -84,6 +87,9 @@ void WebRtcConnection::syncClose() {
   if (conn_event_listener_ != nullptr) {
     conn_event_listener_ = nullptr;
   }
+  pipeline_initialized_ = false;
+  pipeline_->close();
+  pipeline_.reset();
 
   ELOG_DEBUG("%s message: Close ended", toLog());
 }
@@ -97,8 +103,38 @@ void WebRtcConnection::close() {
 }
 
 bool WebRtcConnection::init() {
-  maybeNotifyWebRtcConnectionEvent(global_state_, "");
+  asyncTask([] (std::shared_ptr<WebRtcConnection> connection) {
+    connection->initializePipeline();
+    connection->maybeNotifyWebRtcConnectionEvent(connection->global_state_, "");
+  });
   return true;
+}
+
+void WebRtcConnection::initializePipeline() {
+  if (pipeline_initialized_) {
+    return;
+  }
+  handler_manager_ = std::make_shared<HandlerManager>(shared_from_this());
+  pipeline_->addService(shared_from_this());
+  pipeline_->addService(handler_manager_);
+  pipeline_->addService(stats_);
+
+  pipeline_->addFront(std::make_shared<ConnectionPacketReader>(this));
+
+  pipeline_->addFront(std::make_shared<SenderBandwidthEstimationHandler>());
+  pipeline_->addFront(std::make_shared<RtpPaddingManagerHandler>());
+
+  pipeline_->addFront(std::make_shared<ConnectionPacketWriter>(this));
+  pipeline_->finalize();
+  pipeline_initialized_ = true;
+}
+
+void WebRtcConnection::notifyUpdateToHandlers() {
+  asyncTask([] (std::shared_ptr<WebRtcConnection> conn) {
+    if (conn && conn->pipeline_ && conn->pipeline_initialized_) {
+      conn->pipeline_->notifyUpdate();
+    }
+  });
 }
 
 boost::future<void> WebRtcConnection::createOffer(bool video_enabled, bool audio_enabled, bool bundle) {
@@ -176,6 +212,14 @@ bool WebRtcConnection::createOfferSync(bool video_enabled, bool audio_enabled, b
   return true;
 }
 
+ConnectionQualityLevel WebRtcConnection::getConnectionQualityLevel() {
+  return connection_quality_check_.getLevel();
+}
+
+bool WebRtcConnection::werePacketLossesRecently() {
+  return connection_quality_check_.werePacketLossesRecently();
+}
+
 boost::future<void> WebRtcConnection::addMediaStream(std::shared_ptr<MediaStream> media_stream) {
   return asyncTask([media_stream] (std::shared_ptr<WebRtcConnection> connection) {
     boost::mutex::scoped_lock lock(connection->update_state_mutex_);
@@ -248,6 +292,7 @@ boost::future<void> WebRtcConnection::setRemoteSdpInfo(
         return;
       }
       connection->remote_sdp_ = sdp;
+      connection->notifyUpdateToHandlers();
       boost::future<void> future = connection->processRemoteSdp().then(
         [task_promise] (boost::future<void>) {
           task_promise->set_value();
@@ -568,6 +613,9 @@ void WebRtcConnection::onREMBFromTransport(RtcpHeader *chead, Transport *transpo
 }
 
 void WebRtcConnection::onRtcpFromTransport(std::shared_ptr<DataPacket> packet, Transport *transport) {
+  if (enable_connection_quality_check_) {
+    connection_quality_check_.onFeedback(packet, media_streams_);
+  }
   RtpUtils::forEachRtcpBlock(packet, [this, packet, transport](RtcpHeader *chead) {
     uint32_t ssrc = chead->isFeedback() ? chead->getSourceSSRC() : chead->getSSRC();
     if (chead->isREMB()) {
@@ -587,6 +635,28 @@ void WebRtcConnection::onRtcpFromTransport(std::shared_ptr<DataPacket> packet, T
 
 void WebRtcConnection::onTransportData(std::shared_ptr<DataPacket> packet, Transport *transport) {
   if (getCurrentState() != CONN_READY) {
+    return;
+  }
+  if (transport->mediaType == AUDIO_TYPE) {
+    packet->type = AUDIO_PACKET;
+  } else if (transport->mediaType == VIDEO_TYPE) {
+    packet->type = VIDEO_PACKET;
+  }
+  asyncTask([packet] (std::shared_ptr<WebRtcConnection> connection) {
+    if (!connection->pipeline_initialized_) {
+      ELOG_DEBUG("%s message: Pipeline not initialized yet.", connection->toLog());
+      return;
+    }
+
+    if (connection->pipeline_) {
+      connection->pipeline_->read(std::move(packet));
+    }
+  });
+}
+
+void WebRtcConnection::read(std::shared_ptr<DataPacket> packet) {
+  Transport *transport = (bundle_ || packet->type == VIDEO_PACKET) ? video_transport_.get() : audio_transport_.get();
+  if (transport == nullptr) {
     return;
   }
   char* buf = packet->data;
@@ -771,13 +841,15 @@ WebRTCEvent WebRtcConnection::getCurrentState() {
   return global_state_;
 }
 
-void WebRtcConnection::write(std::shared_ptr<DataPacket> packet) {
+void WebRtcConnection::send(std::shared_ptr<DataPacket> packet) {
   asyncTask([packet] (std::shared_ptr<WebRtcConnection> connection) {
-    connection->syncWrite(packet);
+    if (connection->pipeline_) {
+      connection->pipeline_->write(std::move(packet));
+    }
   });
 }
 
-void WebRtcConnection::syncWrite(std::shared_ptr<DataPacket> packet) {
+void WebRtcConnection::write(std::shared_ptr<DataPacket> packet) {
   if (!sending_) {
     return;
   }
@@ -792,6 +864,13 @@ void WebRtcConnection::syncWrite(std::shared_ptr<DataPacket> packet) {
 void WebRtcConnection::setTransport(std::shared_ptr<Transport> transport) {  // Only for Testing purposes
   video_transport_ = std::move(transport);
   bundle_ = true;
+}
+
+void WebRtcConnection::getJSONStats(std::function<void(std::string)> callback) {
+  asyncTask([callback] (std::shared_ptr<WebRtcConnection> connection) {
+    std::string requested_stats = connection->stats_->getStats();
+    callback(requested_stats);
+  });
 }
 
 }  // namespace erizo
