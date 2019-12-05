@@ -50,7 +50,11 @@ config.erizoController = {};
 //     "credential": password,
 //     "url": url
 // }
-config.erizoController.iceServers = [{'url': 'stun:stun.l.google.com:19302'}]; // default value: [{'url': 'stun:stun.l.google.com:19302'}]
+// config.erizoController.iceServers = [{'url': 'stun:stun.l.google.com:19302'}]; // default value: [{'url': 'stun:stun.l.google.com:19302'}]
+config.erizoController.iceServers = [
+    {'url': 'turn:mirto.intecca.uned.es:3478?transport=tcp', 'username': 'intecca', 'credential': 'uned2019'},
+    {'urls': 'stun:stun.l.google.com:19302'}
+];
 
 // Default and max video bandwidth parameters to be used by clients for both published and subscribed streams
 config.erizoController.defaultVideoBW = 300; //default value: 300
