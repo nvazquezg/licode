@@ -4,7 +4,6 @@ MAINTAINER Lynckia
 
 WORKDIR /opt
 
-ARG COMMIT
 
 # Download latest version of the code and install dependencies
 RUN  apt-get update && apt-get install -y git wget curl tzdata collectd vim net-tools lsof sudo
@@ -64,6 +63,8 @@ RUN echo 'ALL  ALL=(ALL) NOPASSWD:/bin/netstat' >> /etc/sudoers
 RUN echo 'ALL  ALL=(ALL) NOPASSWD:/bin/cat' >> /etc/sudoers
 
 WORKDIR /opt/licode
+
+ARG COMMIT
 
 RUN echo $COMMIT > RELEASE
 RUN date --rfc-3339='seconds' >> RELEASE
