@@ -19,7 +19,7 @@ RUN ./installUbuntuDeps.sh --cleanup --fast
 
 WORKDIR /opt
 
-RUN curl -sL https://deb.nodesource.com/setup_8.x | sudo -E bash -
+RUN curl -sL https://deb.nodesource.com/setup_12.x | sudo -E bash -
 RUN sudo apt-get install -y nodejs
 RUN npm install pm2@latest -g
 RUN pm2 install pm2-logrotate

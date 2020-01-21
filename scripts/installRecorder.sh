@@ -22,5 +22,5 @@ cp $LICODE_ROOT/nuve/nuveClient/dist/nuve.js $EXTRAS/recorder/
 cp $LICODE_ROOT/erizo_controller/erizoClient/dist/production/erizofc/erizofc.js $EXTRAS/recorder/
 
 cd $EXTRAS/recorder
-npm install --loglevel error express body-parser morgan errorhandler socket.io-client
+npm install --loglevel error express body-parser morgan errorhandler socket.io-client request
 cd $CURRENT_DIR
