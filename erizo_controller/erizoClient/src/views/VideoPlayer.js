@@ -64,7 +64,7 @@ const VideoPlayer = (spec) => {
   that.video = document.createElement('video');
   that.video.setAttribute('id', `stream${that.id}`);
   that.video.setAttribute('class', 'licode_stream');
-  that.video.setAttribute('style', 'width: 100%; height: 100%; position: absolute; object-fit: cover');
+  that.video.setAttribute('style', 'width: 100%; height: 100%; position: absolute; object-fit: contain');
   that.video.setAttribute('autoplay', 'autoplay');
   that.video.setAttribute('playsinline', 'playsinline');
 
