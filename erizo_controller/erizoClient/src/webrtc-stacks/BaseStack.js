@@ -11,10 +11,16 @@ import SdpHelpers from '../utils/SdpHelpers';
 import Logger from '../utils/Logger';
 import FunctionQueue from '../utils/FunctionQueue';
 
+const NEGOTIATION_TIMEOUT = 30000;
+
 const BaseStack = (specInput) => {
   const that = {};
   const specBase = specInput;
-  const negotiationQueue = new FunctionQueue();
+  const negotiationQueue = new FunctionQueue(NEGOTIATION_TIMEOUT, () => {
+    if (specBase.onEnqueueingTimeout) {
+      specBase.onEnqueueingTimeout();
+    }
+  });
   that._queue = negotiationQueue;
   let localDesc;
   let remoteDesc;
@@ -128,6 +134,7 @@ const BaseStack = (specInput) => {
     specBase.callback({
       type: localDesc.type,
       sdp: localDesc.sdp,
+      receivedSessionVersion: latestSessionVersion,
       config: { maxVideoBW: specBase.maxVideoBW },
     });
   };
@@ -138,6 +145,7 @@ const BaseStack = (specInput) => {
     specBase.callback({
       type: localDesc.type,
       sdp: localDesc.sdp,
+      receivedSessionVersion: latestSessionVersion,
       config: { maxVideoBW: specBase.maxVideoBW },
     });
     Logger.info('Setting local description', localDesc);
@@ -276,6 +284,10 @@ const BaseStack = (specInput) => {
     protectedRemoveStream: (stream) => {
       try {
         that.peerConnection.removeStream(stream);
+        setTimeout(() => {
+          negotiationQueue.stopEnqueuing();
+          negotiationQueue.nextInQueue();
+        }, 0);
       } catch (e) {
         setTimeout(() => {
           negotiationQueue.stopEnqueuing();
@@ -450,7 +462,7 @@ const BaseStack = (specInput) => {
               new RTCSessionDescription(remoteDesc));
           }).then(() => {
             specBase.remoteDescriptionSet = true;
-            specBase.callback({ type: 'offer-noanswer', sdp: localDesc.sdp });
+            specBase.callback({ type: 'offer-noanswer', sdp: localDesc.sdp, receivedSessionVersion: latestSessionVersion });
           }).catch((error) => {
             callback('error', 'updateSpec');
             rejectMessages.push(`in: protectedNegotiateMaxBW error: ${error}`);
@@ -518,7 +530,7 @@ const BaseStack = (specInput) => {
     }
 
     if (specBase.remoteDescriptionSet) {
-      specBase.callback({ type: 'candidate', candidate: candidateObject });
+      specBase.callback({ type: 'candidate', candidate: candidateObject, receivedSessionVersion: latestSessionVersion });
     } else {
       specBase.localCandidates.push(candidateObject);
       Logger.info('Storing candidate: ', specBase.localCandidates.length, candidateObject);
