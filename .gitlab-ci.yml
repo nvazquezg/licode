@@ -9,7 +9,7 @@ before_script:
 build_job:
     stage: build
     script:
-        - ./scripts/installUbuntuDeps.sh --cleanup --enable-gpl --fast
+        - ./scripts/installUbuntuDeps.sh --cleanup --fast
         - ./scripts/installErizo.sh -eacdfs
         - ./scripts/installNuve.sh
         - ./scripts/installRecorder.sh
