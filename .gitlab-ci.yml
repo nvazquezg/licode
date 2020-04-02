@@ -1,4 +1,4 @@
-image: ubuntu:14.04
+image: ubuntu:16.04
 
 stages:
     - build
@@ -9,7 +9,7 @@ before_script:
 build_job:
     stage: build
     script:
-        - ./scripts/installUbuntuDeps.sh --cleanup --enable-gpl
+        - ./scripts/installUbuntuDeps.sh --cleanup --enable-gpl --fast
         - ./scripts/installErizo.sh -eacdfs
         - ./scripts/installNuve.sh
         - ./scripts/installRecorder.sh
