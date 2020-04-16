@@ -78,6 +78,7 @@ ExternalOutput::ExternalOutput(std::shared_ptr<Worker> worker, const std::string
 }
 
 bool ExternalOutput::init() {
+  ELOG_DEBUG("init");
   sink_fb_source_ = std::dynamic_pointer_cast<FeedbackSource>(shared_from_this());
   MediaInfo m;
   m.hasVideo = false;
@@ -92,6 +93,7 @@ bool ExternalOutput::init() {
 }
 
 void ExternalOutput::setHasAudioAndVideo(bool hasAudio, bool hasVideo) {
+  ELOG_DEBUG("setHasAudioAndVideo");
   hasAudio_ = hasAudio;
   hasVideo_ = hasVideo;
 }
@@ -101,6 +103,7 @@ ExternalOutput::~ExternalOutput() {
 }
 
 boost::future<void> ExternalOutput::close() {
+  ELOG_DEBUG("Close");
   std::shared_ptr<ExternalOutput> shared_this = shared_from_this();
   return asyncTask([shared_this] (std::shared_ptr<ExternalOutput> connection) {
     shared_this->syncClose();
@@ -108,9 +111,11 @@ boost::future<void> ExternalOutput::close() {
 }
 
 void ExternalOutput::syncClose() {
+  ELOG_DEBUG("syncClose1");
   if (!recording_) {
     return;
   }
+  ELOG_DEBUG("syncClose2");
   // Stop our thread so we can safely nuke libav stuff and close our
   // our file.
   cond_.notify_one();
@@ -153,10 +158,12 @@ boost::future<void> ExternalOutput::asyncTask(
 }
 
 void ExternalOutput::receiveRawData(const RawDataPacket& /*packet*/) {
+  ELOG_DEBUG("receiveRawData");
   return;
 }
 // This is called by our fec_ object once it recovers a packet.
 bool ExternalOutput::OnRecoveredPacket(const uint8_t* rtp_packet, size_t rtp_packet_length) {
+  ELOG_DEBUG("OnRecoveredPacket");
   video_queue_.pushPacket((const char*)rtp_packet, rtp_packet_length);
   return true;
 }
@@ -164,6 +171,7 @@ bool ExternalOutput::OnRecoveredPacket(const uint8_t* rtp_packet, size_t rtp_pac
 int32_t ExternalOutput::OnReceivedPayloadData(const uint8_t* payload_data, size_t payload_size,
                                               const webrtc::WebRtcRTPHeader* rtp_header) {
   // Unused by WebRTC's FEC implementation; just something we have to implement.
+  ELOG_DEBUG("OnReceivedPayloadData");
   return 0;
 }
 
@@ -269,6 +277,7 @@ void ExternalOutput::updateVideoCodec(RtpMap map) {
     depacketizer_.reset(new H264Depacketizer());
     video_codec_ = AV_CODEC_ID_H264;
   }
+  ELOG_DEBUG("updateVideoCodec");
 }
 
 void ExternalOutput::maybeWriteVideoPacket(char* buf, int len) {
@@ -311,12 +320,14 @@ void ExternalOutput::maybeWriteVideoPacket(char* buf, int len) {
 }
 
 void ExternalOutput::notifyUpdateToHandlers() {
+  ELOG_DEBUG("notifyUpdateToHandlers");
   asyncTask([] (std::shared_ptr<ExternalOutput> output) {
     output->pipeline_->notifyUpdate();
   });
 }
 
 void ExternalOutput::initializePipeline() {
+  ELOG_DEBUG("initializePipeline");
   stats_->getNode()["total"].insertStat("senderBitrateEstimation",
       CumulativeStat{static_cast<uint64_t>(kExternalOutputMaxBitrate)});
 
@@ -381,8 +392,8 @@ bool ExternalOutput::initContext() {
   bool init_video = false;
   bool init_audio = false;
 
-  ELOG_DEBUG("hasVideo_: %d hasAudio_: %d video_codec_: %d audio_codec_: %d",
-             hasVideo_, hasAudio_, video_codec_, audio_codec_);
+  // ELOG_DEBUG("hasVideo_: %d hasAudio_: %d video_codec_: %d audio_codec_: %d",
+  //           hasVideo_, hasAudio_, video_codec_, audio_codec_);
 
   if (hasVideo_ && video_codec_ == AV_CODEC_ID_NONE) {
       return false;
@@ -537,6 +548,7 @@ void ExternalOutput::queueData(char* buffer, int length, packetType type) {
 }
 
 int ExternalOutput::sendFirPacket() {
+  ELOG_DEBUG("sendFirPacket");
     if (auto fb_sink = fb_sink_.lock()) {
       RtcpHeader pli_header;
       pli_header.setPacketType(RTCP_PS_Feedback_PT);
@@ -554,6 +566,7 @@ int ExternalOutput::sendFirPacket() {
 }
 
 void ExternalOutput::sendLoop() {
+  ELOG_DEBUG("sendLoop");
   while (recording_) {
     boost::unique_lock<boost::mutex> lock(mtx_);
     cond_.wait(lock);
@@ -582,6 +595,7 @@ void ExternalOutput::sendLoop() {
 }
 
 AVDictionary* ExternalOutput::genVideoMetadata() {
+  ELOG_DEBUG("genVideoMetadata");
     AVDictionary* dict = NULL;
     switch (ext_processor_.getVideoRotation()) {
       case kVideoRotation_0:

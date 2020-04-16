@@ -658,7 +658,9 @@ class Client extends events.EventEmitter {
   }
 
   onStartRecorder(options, callback) {
+    log.info('ExternalOutputTrace-client-onStartRecorder1', this.id, JSON.stringify(this.room), options);
     if (!this.hasPermission(Permission.RECORD)) {
+      log.info('ExternalOutputTrace-client-onStartRecorder-unauthorized', this.id, JSON.stringify(this.room), options);
       callback(null, 'Unauthorized');
       return;
     }
@@ -678,6 +680,7 @@ class Client extends events.EventEmitter {
              `url: ${url}`);
 
     if (this.room.p2p) {
+      console.info('ExternalOutputTrace-client-onStartRecorder-Stream can not be recorded, is p2p', this.id, JSON.stringify(this.room));
       callback(null, 'Stream can not be recorded');
       return;
     }
@@ -707,7 +710,9 @@ class Client extends events.EventEmitter {
           `url: ${url}`);
         callback(recordingId);
         stream.updateExternalOutputSubscriberState(url, StreamStates.SUBSCRIBER_READY);
+        log.info('ExternalOutputTrace-client-onStartRecorder-callback recordingId:', this.id, JSON.stringify(this.room), recordingId);
       });
+      log.info('ExternalOutputTrace-client-onStartRecorder-added external output:', this.id, JSON.stringify(this.room), streamId, url, mediaOptions);
     } else {
       log.warn('message: startRecorder stream cannot be recorded, ' +
         'state: RECORD_FAILED, ' +
@@ -715,6 +720,7 @@ class Client extends events.EventEmitter {
         `url: ${url}`);
       callback(null, 'Stream can not be recorded');
     }
+    log.info('ExternalOutputTrace-client-onStartRecorderEnd', this.id, JSON.stringify(this.room), options);
   }
 
   onStopRecorder(options, callback) {
@@ -739,6 +745,7 @@ class Client extends events.EventEmitter {
     this.room.streamManager.forEachPublishedStream((stream) => {
       if (stream.hasExternalOutputSubscriber(url)) {
         stream.removeExternalOutputSubscriber(url);
+        console.log('ExternalOutputTrace-client-onStopRecorder', this.id, JSON.stringify(this.room), JSON.stringify(stream));
         this.room.controller.removeExternalOutput(stream.id, url, callback);
         removed = true;
       }
