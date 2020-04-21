@@ -52,7 +52,7 @@ config.erizoController = {};
 // }
 // config.erizoController.iceServers = [{'url': 'stun:stun.l.google.com:19302'}]; // default value: [{'url': 'stun:stun.l.google.com:19302'}]
 config.erizoController.iceServers = [
-    {'url': 'turn:mirto.intecca.uned.es:3478?transport=tcp', 'username': 'intecca', 'credential': 'uned2019'},
+    {'url': 'turn:193.146.230.209:3478', 'username': 'intecca', 'credential': 'uned2019'},
     {'urls': 'stun:stun.l.google.com:19302'}
 ];
 
